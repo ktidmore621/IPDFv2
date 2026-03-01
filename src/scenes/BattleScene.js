@@ -54,9 +54,13 @@ class BattleScene extends Phaser.Scene {
         // PLAYER SHIP
         // =========================================================
 
-        // Create the player near the left side of the world, vertically centered
+        // Create the player near the left side of the world, at low altitude
+        // so the ground and nearest mountain layers are visible on screen.
+        // 0.78 puts the ship low enough that the camera view (1080px tall)
+        // shows the ground (~80px from the bottom of the screen) and the
+        // near mountain formations above, making it feel like a low flyover.
         const startX = 400;
-        const startY = this.worldHeight * 0.5;
+        const startY = this.worldHeight * 0.78;
         this.player = new PlayerShip(this, startX, startY);
 
         // =========================================================
