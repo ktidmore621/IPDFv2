@@ -64,6 +64,15 @@ class PlayerShip {
         // --- Track the angle the ship is facing ---
         // This is in radians. 0 = facing right, PI/2 = facing down, etc.
         this.facingAngle = 0;
+
+        // --- Health system (Phase 4) ---
+        this.maxHp = 100;
+        this.hp = this.maxHp;
+        this.isDead = false;
+
+        // Damage flash state — ship briefly turns white when hit
+        this._damageFlashTimer = 0;
+        this._isFlashing = false;
     }
 
     /**
@@ -135,5 +144,78 @@ class PlayerShip {
      */
     getGameObject() {
         return this.container;
+    }
+
+    // =================================================================
+    // HEALTH SYSTEM (Phase 4)
+    // =================================================================
+
+    /**
+     * Apply damage to the player ship.
+     * Flashes the ship white as feedback. At 0 HP, triggers death.
+     *
+     * @param {number} amount — Damage to deal
+     */
+    takeDamage(amount) {
+        if (this.isDead) return;
+
+        this.hp -= amount;
+        if (this.hp < 0) this.hp = 0;
+
+        // Visual feedback: flash white for a brief moment
+        this._triggerDamageFlash();
+
+        if (this.hp <= 0) {
+            this.die();
+        }
+    }
+
+    /**
+     * Flash the ship white/bright for 100ms as hit feedback.
+     */
+    _triggerDamageFlash() {
+        if (this._isFlashing) return;
+        this._isFlashing = true;
+
+        // Make the ship very bright (alpha boost)
+        this.shipGraphic.setAlpha(3.0);
+
+        this.scene.time.delayedCall(100, () => {
+            if (!this.isDead) {
+                this.shipGraphic.setAlpha(1.0);
+            }
+            this._isFlashing = false;
+        });
+    }
+
+    /**
+     * Handle player death — explosion effect and scene restart.
+     */
+    die() {
+        if (this.isDead) return;
+        this.isDead = true;
+
+        // Hide the ship
+        this.container.setVisible(false);
+        this.container.body.enable = false;
+
+        // Play a brief explosion at ship's position
+        const explosion = VectorGraphics.drawExplosion(this.scene, 30);
+        explosion.setPosition(this.container.x, this.container.y);
+        explosion.setDepth(10);
+
+        this.scene.tweens.add({
+            targets: explosion,
+            alpha: 0,
+            scaleX: 3,
+            scaleY: 3,
+            duration: 500,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                explosion.destroy();
+                // Restart the scene after explosion finishes
+                this.scene.scene.restart();
+            }
+        });
     }
 }

@@ -166,11 +166,44 @@ class BattleScene extends Phaser.Scene {
         cam.startFollow(this.player.getGameObject(), false, 0.1, 0.1);
 
         // =========================================================
+        // COMBAT MANAGER (Phase 4 — handles all collision/damage)
+        // =========================================================
+        this.combatManager = new CombatManager(this, this.player, this.weaponManager);
+
+        // =========================================================
+        // ENEMY STRUCTURES & ATMOSPHERIC ORCS (Phase 4)
+        // =========================================================
+        try {
+            this._createEnemies();
+        } catch (e) {
+            console.error('Enemy creation failed:', e);
+        }
+
+        // =========================================================
+        // ATMOSPHERIC ORC SOLDIERS (Phase 4 — visual only)
+        // =========================================================
+        try {
+            this._createOrcSoldiers();
+        } catch (e) {
+            console.error('Orc soldier creation failed:', e);
+        }
+
+        // =========================================================
+        // HUD — Health bar, objective counter (Phase 4)
+        // =========================================================
+        this._createHUD();
+
+        // =========================================================
         // AMBIENT ATMOSPHERE — Slight vignette/tint
         // =========================================================
         // Add a very subtle dark overlay at the edges for atmosphere.
         // This is a cosmetic touch — makes it feel like deep space.
         this._createAtmosphereOverlay();
+
+        // =========================================================
+        // MISSION STATE (Phase 4)
+        // =========================================================
+        this.missionComplete = false;
     }
 
     // =====================================================================
@@ -503,6 +536,224 @@ class BattleScene extends Phaser.Scene {
     }
 
     // =====================================================================
+    // ENEMY STRUCTURES (Phase 4) — Placed on terrain in clusters
+    // =====================================================================
+
+    /**
+     * Creates all enemy structures for Level 1.
+     * Layout: quiet zone on left, clusters of enemies in middle/right,
+     * refinery at far right as final objective.
+     *
+     * Level 1 limits: max 6 weapon emplacements, 1-3 mining platforms, 1 refinery.
+     */
+    _createEnemies() {
+        if (!this.heightMap) {
+            console.warn('Skipping enemies — no heightMap available');
+            return;
+        }
+
+        this.enemyStructures = [];
+
+        // Helper to get terrain Y at a given X position
+        const getGroundY = (x) => {
+            const ix = Math.floor(Math.min(Math.max(x, 0), this.worldWidth - 1));
+            return this.heightMap[ix];
+        };
+
+        // --- OUTPOST 1 (around x = 2500): 1 plasma turret + 1 double cannon ---
+        this._spawnStructure(PlasmaTurret, 2400, getGroundY(2400));
+        this._spawnStructure(DoubleCannon, 2700, getGroundY(2700));
+
+        // --- MINING PLATFORM 1 (around x = 3500) ---
+        this._spawnStructure(MiningPlatform, 3500, getGroundY(3500));
+
+        // --- OUTPOST 2 (around x = 5000): 1 missile silo + 1 plasma turret ---
+        this._spawnStructure(MissileSilo, 4800, getGroundY(4800));
+        this._spawnStructure(PlasmaTurret, 5200, getGroundY(5200));
+
+        // --- MINING PLATFORM 2 (around x = 6500) ---
+        this._spawnStructure(MiningPlatform, 6500, getGroundY(6500));
+
+        // --- OUTPOST 3 (around x = 8000): 1 missile silo + 1 double cannon ---
+        this._spawnStructure(MissileSilo, 7800, getGroundY(7800));
+        this._spawnStructure(DoubleCannon, 8200, getGroundY(8200));
+
+        // --- REFINERY (around x = 10500 — near end of map) ---
+        this._spawnStructure(Refinery, 10500, getGroundY(10500));
+
+        // Count mission objectives
+        this.totalObjectives = 0;
+        this.destroyedObjectives = 0;
+        for (const s of this.enemyStructures) {
+            if (s.isObjective) this.totalObjectives++;
+        }
+    }
+
+    /**
+     * Spawn a single enemy structure at the given position.
+     * Registers it with the combat manager for collision tracking.
+     *
+     * @param {Function} StructureClass — The class to instantiate
+     * @param {number} x — World X position
+     * @param {number} groundY — Terrain Y at this X
+     */
+    _spawnStructure(StructureClass, x, groundY) {
+        const structure = new StructureClass(this, x, groundY);
+        this.enemyStructures.push(structure);
+        this.combatManager.addStructure(structure);
+    }
+
+    // =====================================================================
+    // ATMOSPHERIC ORC SOLDIERS (Phase 4) — Non-combat walking figures
+    // =====================================================================
+
+    /**
+     * Scatter 8-12 orc foot soldiers across the terrain.
+     * They walk slowly, shoot harmless red spray when player is near.
+     */
+    _createOrcSoldiers() {
+        if (!this.heightMap) return;
+
+        this.orcSoldiers = [];
+        const count = 8 + Math.floor(Math.random() * 5);
+
+        for (let i = 0; i < count; i++) {
+            // Spread across the map, avoiding the very edges
+            const x = 500 + Math.random() * (this.worldWidth - 1000);
+            const ix = Math.floor(Math.min(Math.max(x, 0), this.worldWidth - 1));
+            const groundY = this.heightMap[ix];
+
+            const soldier = new OrcSoldier(this, x, groundY);
+            this.orcSoldiers.push(soldier);
+        }
+    }
+
+    // =====================================================================
+    // HUD — Health bar and objective counter (Phase 4)
+    // =====================================================================
+
+    /**
+     * Creates the heads-up display elements:
+     *   - Health bar in the top-left (fixed to camera)
+     *   - Objective counter in the top-right (fixed to camera)
+     */
+    _createHUD() {
+        // --- Health bar background (dark frame) ---
+        this.healthBarBg = this.add.graphics();
+        this.healthBarBg.setScrollFactor(0);
+        this.healthBarBg.setDepth(600);
+
+        // Dark background/frame
+        this.healthBarBg.fillStyle(0x000000, 0.6);
+        this.healthBarBg.fillRect(18, 18, 204, 24);
+        this.healthBarBg.lineStyle(2, 0x444444, 0.8);
+        this.healthBarBg.strokeRect(18, 18, 204, 24);
+
+        // --- Health bar fill (green → yellow → red) ---
+        this.healthBarFill = this.add.graphics();
+        this.healthBarFill.setScrollFactor(0);
+        this.healthBarFill.setDepth(601);
+
+        // "HP" label
+        this.healthLabel = this.add.text(22, 20, 'HP', {
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            color: '#aaaaaa'
+        });
+        this.healthLabel.setScrollFactor(0);
+        this.healthLabel.setDepth(602);
+
+        // --- Objective counter text (top-right) ---
+        this.objectiveText = this.add.text(this.scale.width - 20, 22, '', {
+            fontSize: '16px',
+            fontFamily: 'monospace',
+            color: '#ffcc00',
+            align: 'right'
+        });
+        this.objectiveText.setOrigin(1, 0);  // Right-aligned
+        this.objectiveText.setScrollFactor(0);
+        this.objectiveText.setDepth(602);
+
+        // --- Mission complete text (hidden until objectives done) ---
+        this.missionCompleteText = this.add.text(
+            this.scale.width / 2,
+            this.scale.height / 2,
+            'MISSION COMPLETE',
+            {
+                fontSize: '64px',
+                fontFamily: 'monospace',
+                fontStyle: 'bold',
+                color: '#ffcc00',
+                stroke: '#000000',
+                strokeThickness: 4,
+                align: 'center'
+            }
+        );
+        this.missionCompleteText.setOrigin(0.5, 0.5);
+        this.missionCompleteText.setScrollFactor(0);
+        this.missionCompleteText.setDepth(700);
+        this.missionCompleteText.setVisible(false);
+
+        // Initial HUD update
+        this._updateHUD();
+    }
+
+    /**
+     * Redraws the health bar and objective counter.
+     * Called every frame from update().
+     */
+    _updateHUD() {
+        // --- Health bar ---
+        const hpRatio = this.player.hp / this.player.maxHp;
+        const barWidth = Math.max(0, 196 * hpRatio);
+
+        // Color shifts: green (>60%), yellow (30-60%), red (<30%)
+        let barColor;
+        if (hpRatio > 0.6) {
+            barColor = 0x44cc44;
+        } else if (hpRatio > 0.3) {
+            barColor = 0xcccc44;
+        } else {
+            barColor = 0xcc4444;
+        }
+
+        this.healthBarFill.clear();
+        this.healthBarFill.fillStyle(barColor, 0.9);
+        this.healthBarFill.fillRect(22, 22, barWidth, 16);
+
+        // --- Objective counter ---
+        if (this.enemyStructures) {
+            // Count remaining objectives
+            let remaining = 0;
+            for (const s of this.enemyStructures) {
+                if (s.isObjective && !s.isDestroyed) remaining++;
+            }
+            this.objectiveText.setText('Targets: ' + remaining + ' / ' + this.totalObjectives + ' remaining');
+        }
+    }
+
+    /**
+     * Check if all mission objectives are destroyed.
+     * If so, show "MISSION COMPLETE" and freeze the game.
+     */
+    _checkMissionComplete() {
+        if (this.missionComplete) return;
+
+        for (const s of this.enemyStructures) {
+            if (s.isObjective && !s.isDestroyed) return;  // Still have targets
+        }
+
+        // All objectives destroyed!
+        this.missionComplete = true;
+        this.missionCompleteText.setVisible(true);
+
+        // Freeze the game — pause physics and input after a brief moment
+        this.time.delayedCall(500, () => {
+            this.physics.pause();
+        });
+    }
+
+    // =====================================================================
     // ATMOSPHERE OVERLAY — Vignette effect
     // =====================================================================
 
@@ -549,6 +800,9 @@ class BattleScene extends Phaser.Scene {
      * @param {number} delta — Time since last frame in milliseconds
      */
     update(time, delta) {
+        // If mission complete or player dead, skip updates
+        if (this.missionComplete || this.player.isDead) return;
+
         // Step 1: Read all player inputs (keyboard + touch + weapon buttons)
         this.inputManager.update();
 
@@ -572,5 +826,29 @@ class BattleScene extends Phaser.Scene {
 
         // Step 4: Update all active projectiles (movement, distance checks, splits)
         this.weaponManager.update(time, delta);
+
+        // Step 5 (Phase 4): Update enemy structures (aim, fire, animate)
+        const playerPos = this.player.getPosition();
+        if (this.enemyStructures) {
+            for (const structure of this.enemyStructures) {
+                structure.update(time, delta, playerPos.x, playerPos.y);
+            }
+        }
+
+        // Step 6 (Phase 4): Update atmospheric orc soldiers
+        if (this.orcSoldiers) {
+            for (const soldier of this.orcSoldiers) {
+                soldier.update(delta, playerPos.x, playerPos.y, this.heightMap, this.worldWidth);
+            }
+        }
+
+        // Step 7 (Phase 4): Update combat manager (collision detection + damage)
+        if (this.combatManager) {
+            this.combatManager.update(time, delta);
+        }
+
+        // Step 8 (Phase 4): Update HUD and check mission objectives
+        this._updateHUD();
+        this._checkMissionComplete();
     }
 }
