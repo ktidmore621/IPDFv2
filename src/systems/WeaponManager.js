@@ -245,11 +245,12 @@ class WeaponManager {
         this.plasmaLastFired = time;
 
         // Calculate spawn position at the ship's nose.
-        // The ship graphic's nose is at local (30, 0). We rotate that point
-        // by the ship's facing angle to get the world-space nose position.
+        // The ship sprite's nose tip is roughly 50px from center (at 0.2 scale).
+        // We rotate that offset by the ship's facing angle to get the
+        // world-space nose position.
         const angle = this.player.facingAngle;
-        const noseX = this.player.container.x + Math.cos(angle) * 30;
-        const noseY = this.player.container.y + Math.sin(angle) * 30;
+        const noseX = this.player.container.x + Math.cos(angle) * 50;
+        const noseY = this.player.container.y + Math.sin(angle) * 50;
 
         // Fire the bolt
         this._activateProjectile(bolt, noseX, noseY, angle, this.plasmaSpeed);
@@ -279,10 +280,10 @@ class WeaponManager {
 
         this.missileLastFired = time;
 
-        // Spawn at the ship's nose, same as plasma
+        // Spawn at the ship's nose, same as plasma (50px from center at 0.2 scale)
         const angle = this.player.facingAngle;
-        const noseX = this.player.container.x + Math.cos(angle) * 30;
-        const noseY = this.player.container.y + Math.sin(angle) * 30;
+        const noseX = this.player.container.x + Math.cos(angle) * 50;
+        const noseY = this.player.container.y + Math.sin(angle) * 50;
 
         // Fire the missile
         this._activateProjectile(missile, noseX, noseY, angle, this.missileSpeed);
