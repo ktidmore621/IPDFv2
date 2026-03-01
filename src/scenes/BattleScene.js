@@ -77,14 +77,17 @@ class BattleScene extends Phaser.Scene {
         // scroll past the edges of the world.
         cam.setBounds(0, 0, this.worldWidth, this.worldHeight);
 
-        // Tell the camera to follow the player's container
-        // The lerp values (0.08) control how "smoothly" the camera catches up.
-        // Lower = smoother/slower, Higher = snappier. 1.0 = instant.
-        cam.startFollow(this.player.getGameObject(), false, 0.08, 0.08);
+        // Tell the camera to follow the player's container.
+        // The lerp values (0.1) control how "smoothly" the camera catches up.
+        // Lower = smoother/slower trailing, Higher = snappier. 1.0 = instant.
+        // 0.1 gives a nice cinematic chase-camera feel — the ship leads slightly
+        // and the camera gracefully catches up, creating a sense of speed.
+        cam.startFollow(this.player.getGameObject(), false, 0.1, 0.1);
 
-        // Deadzone: a small area in the center of the screen where the player
-        // can move without the camera moving. This prevents tiny jitters.
-        cam.setDeadzone(100, 80);
+        // Deadzone: a tiny area in the center of the screen where the player
+        // can move without the camera moving. Kept very small (20px) to prevent
+        // micro-jitters but avoid the "mud wall" effect a large deadzone creates.
+        cam.setDeadzone(20, 20);
 
         // =========================================================
         // AMBIENT ATMOSPHERE — Slight vignette/tint
