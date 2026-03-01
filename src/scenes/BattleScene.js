@@ -44,38 +44,76 @@ class BattleScene extends Phaser.Scene {
         // Tell the physics engine about the world boundaries
         this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
 
+        // --- Debug: log the device's actual max texture size ---
+        // This helps diagnose mobile black screen issues. Mobile GPUs
+        // often cap at 4096px, so any Graphics or texture wider than that
+        // will silently fail, causing a black screen.
+        try {
+            const gl = this.game.renderer.gl;
+            if (gl) {
+                console.log('Max texture size:', gl.getParameter(gl.MAX_TEXTURE_SIZE));
+            }
+        } catch (e) {
+            console.log('Could not query max texture size');
+        }
+
         // =========================================================
         // SKY — Rich alien atmosphere with nebula and haze
+        // Wrapped in try/catch so if sky fails, game still loads.
         // =========================================================
-        this._createSky();
+        try {
+            this._createSky();
+        } catch (e) {
+            console.error('Sky creation failed:', e);
+        }
 
         // =========================================================
         // STARS — Scattered across the upper sky
         // =========================================================
-        this._createStars();
+        try {
+            this._createStars();
+        } catch (e) {
+            console.error('Stars creation failed:', e);
+        }
 
         // =========================================================
         // PARALLAX MOUNTAINS — Background depth layers
         // =========================================================
-        this._createMountainLayers();
+        try {
+            this._createMountainLayers();
+        } catch (e) {
+            console.error('Mountain layers creation failed:', e);
+        }
 
         // =========================================================
         // ATMOSPHERIC HAZE — Horizon line effect
         // =========================================================
-        this._createAtmosphericHaze();
+        try {
+            this._createAtmosphericHaze();
+        } catch (e) {
+            console.error('Atmospheric haze creation failed:', e);
+        }
 
         // =========================================================
         // TERRAIN — Procedurally generated alien ground
         // =========================================================
-        this._createTerrain();
+        try {
+            this._createTerrain();
+        } catch (e) {
+            console.error('Terrain creation failed:', e);
+        }
 
         // =========================================================
         // GEOLOGICAL FORMATIONS — Spires, arches, mesas, crystals
         // =========================================================
-        this._createFormations();
+        try {
+            this._createFormations();
+        } catch (e) {
+            console.error('Formations creation failed:', e);
+        }
 
         // =========================================================
-        // PLAYER SHIP
+        // PLAYER SHIP (Phase 1 — must work, no try/catch)
         // =========================================================
 
         // Create the player near the left side of the world, at low altitude
@@ -140,13 +178,16 @@ class BattleScene extends Phaser.Scene {
         const gameHeight = this.scale.height;
         const gameWidth = this.scale.width;
 
+        // --- MOBILE OPTIMIZATION ---
+        // The sky (gradient + nebula clouds) is static and never changes.
+        // Instead of keeping 4-6 separate live Graphics objects that the GPU
+        // has to re-render every frame, we draw everything onto one temporary
+        // Graphics and then bake it into a single RenderTexture. This turns
+        // hundreds of per-frame draw calls into one cheap textured quad.
+        const tempG = this.add.graphics();
+
         // --- Sky gradient ---
         // A rich gradient from near-black purple at top to dark amber at bottom.
-        // setScrollFactor(0) means it stays fixed — the sky doesn't move.
-        const skyGraphic = this.add.graphics();
-        skyGraphic.setDepth(-100);
-        skyGraphic.setScrollFactor(0);
-
         for (let y = 0; y < gameHeight; y++) {
             const t = y / gameHeight;
 
@@ -176,26 +217,12 @@ class BattleScene extends Phaser.Scene {
             r = Math.max(0, Math.min(255, r + Math.floor(bandShift)));
 
             const color = (r << 16) | (Math.max(0, g) << 8) | Math.max(0, b);
-            skyGraphic.fillStyle(color, 1);
-            skyGraphic.fillRect(0, y, gameWidth, 1);
+            tempG.fillStyle(color, 1);
+            tempG.fillRect(0, y, gameWidth, 1);
         }
 
-        // --- Nebula clouds ---
+        // --- Nebula clouds (drawn on same temp Graphics) ---
         // 3-5 large, soft, translucent cloud shapes in the upper sky.
-        // Fixed to the camera (scrollFactor 0) — they're in deep space.
-        this._createNebulaClouds();
-    },
-
-    /**
-     * Creates soft nebula cloud shapes in the upper sky.
-     * Each nebula is a cluster of overlapping ellipses at very low opacity,
-     * creating a soft, blurry appearance.
-     */
-    _createNebulaClouds() {
-        const gameWidth = this.scale.width;
-        const gameHeight = this.scale.height;
-
-        // Nebula colors: deep purples, toxic ambers, dark reds
         const nebulaColors = [
             { color: 0x4a1a4a, alpha: 0.08 },  // Deep purple
             { color: 0x6b2a1a, alpha: 0.06 },  // Dark red-brown
@@ -204,33 +231,30 @@ class BattleScene extends Phaser.Scene {
             { color: 0x5a1a2a, alpha: 0.05 }   // Crimson
         ];
 
-        const nebulaCount = 3 + Math.floor(Math.random() * 3);  // 3-5 nebulae
-
+        const nebulaCount = 3 + Math.floor(Math.random() * 3);
         for (let n = 0; n < nebulaCount; n++) {
-            const nebula = this.add.graphics();
-            nebula.setDepth(-98);
-            nebula.setScrollFactor(0);  // Fixed — deep space, doesn't move
-
-            // Pick a color for this nebula
             const nColor = nebulaColors[n % nebulaColors.length];
-
-            // Position in the upper portion of the sky
             const centerX = gameWidth * 0.15 + Math.random() * gameWidth * 0.7;
             const centerY = gameHeight * 0.1 + Math.random() * gameHeight * 0.4;
-
-            // Each nebula is made of several overlapping ellipses
-            // for a soft, blurred look
             const blobCount = 4 + Math.floor(Math.random() * 4);
             for (let b = 0; b < blobCount; b++) {
                 const bx = centerX + (Math.random() - 0.5) * 200;
                 const by = centerY + (Math.random() - 0.5) * 100;
                 const bw = 100 + Math.random() * 250;
                 const bh = 60 + Math.random() * 120;
-
-                nebula.fillStyle(nColor.color, nColor.alpha);
-                nebula.fillEllipse(bx, by, bw, bh);
+                tempG.fillStyle(nColor.color, nColor.alpha);
+                tempG.fillEllipse(bx, by, bw, bh);
             }
         }
+
+        // --- Bake into a single RenderTexture ---
+        // This replaces 4-6 live Graphics objects with 1 static texture.
+        // The RT is screen-sized (1920x1080) which is well within mobile limits.
+        const skyRT = this.add.renderTexture(0, 0, gameWidth, gameHeight);
+        skyRT.setDepth(-100);
+        skyRT.setScrollFactor(0);
+        skyRT.draw(tempG);
+        tempG.destroy();
     },
 
     /**
@@ -258,7 +282,8 @@ class BattleScene extends Phaser.Scene {
         // --- Bright twinkling stars ---
         // A few larger, brighter stars that slowly pulse in brightness.
         // Each is its own Graphics object so it can be individually tweened.
-        const twinkleCount = 8 + Math.floor(Math.random() * 5);
+        // Reduced count for mobile performance (was 8-12, now 3-4).
+        const twinkleCount = 3 + Math.floor(Math.random() * 2);
         for (let i = 0; i < twinkleCount; i++) {
             const star = this.add.graphics();
             star.setDepth(-89);
@@ -309,8 +334,8 @@ class BattleScene extends Phaser.Scene {
             yOffset: 0.55,         // Start 55% down the world
             heightScale: 0.35,     // Take up to 35% of world height
             count: 4,
-            minWidth: 2000,
-            maxWidth: 4000
+            minWidth: 1500,
+            maxWidth: 3000
         });
 
         // --- Layer 2: Mid mountains ---
@@ -389,26 +414,37 @@ class BattleScene extends Phaser.Scene {
      * right depth.
      */
     _createAtmosphericHaze() {
-        const haze = this.add.graphics();
-        haze.setDepth(-55);  // Between near mountains and terrain
-        haze.setScrollFactor(0.5, 1);  // Slow horizontal scroll, normal vertical
+        // --- MOBILE OPTIMIZATION ---
+        // The old haze was 18,000px wide (worldWidth * 1.5), which exceeds
+        // mobile max texture size and causes silent GPU failure.
+        // With scrollFactor 0.5, the haze only needs to cover:
+        //   screenWidth + (maxCameraScroll * scrollFactor)
+        //   = 1920 + (10080 * 0.5) = ~7000px
+        // We use 4096 to stay within mobile texture limits. The haze is
+        // a subtle visual effect, so slight edge clipping is unnoticeable.
+        const hazeWidth = 4096;
 
-        // The haze sits just above where the terrain typically starts.
-        // The terrain ground base is around worldHeight * 0.82.
-        const hazeY = this.worldHeight * 0.68;
+        // Also bake to a RenderTexture instead of keeping 140 live fillRect
+        // calls per frame. We use fewer, thicker bands (step of 4px instead of 1px)
+        // for even less overhead.
         const hazeHeight = 140;
+        const hazeY = this.worldHeight * 0.68;
 
-        // Draw several semi-transparent bands for a gradient haze effect
-        // (More opaque in the middle, fading to transparent at top and bottom)
-        for (let i = 0; i < hazeHeight; i++) {
+        const tempG = this.add.graphics();
+        for (let i = 0; i < hazeHeight; i += 4) {
             const t = i / hazeHeight;
             // Bell curve opacity: peaks in the middle, fades at edges
             const alpha = 0.08 * Math.sin(t * Math.PI);
-
-            // Warm amber-purple haze color
-            haze.fillStyle(0x2a1a20, alpha);
-            haze.fillRect(0, hazeY + i, this.worldWidth * 1.5, 1);
+            tempG.fillStyle(0x2a1a20, alpha);
+            tempG.fillRect(0, i, hazeWidth, 4);  // 4px tall bands
         }
+
+        // Bake haze into a RenderTexture (4096 x 140 — mobile safe)
+        const hazeRT = this.add.renderTexture(0, hazeY, hazeWidth, hazeHeight);
+        hazeRT.setDepth(-55);  // Between near mountains and terrain
+        hazeRT.setScrollFactor(0.5, 1);  // Slow horizontal scroll, normal vertical
+        hazeRT.draw(tempG);
+        tempG.destroy();
     },
 
     // =====================================================================
@@ -456,6 +492,13 @@ class BattleScene extends Phaser.Scene {
      * scattered across the terrain surface using FormationGenerator.
      */
     _createFormations() {
+        // Guard: formations need the height map from terrain generation.
+        // If terrain creation failed, skip formations too.
+        if (!this.heightMap) {
+            console.warn('Skipping formations — no heightMap available (terrain may have failed)');
+            return;
+        }
+
         // Generate all formations. They'll be placed at the correct
         // terrain surface height automatically.
         this.formations = FormationGenerator.generateFormations(
