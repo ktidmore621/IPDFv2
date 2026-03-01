@@ -82,12 +82,13 @@ class BattleScene extends Phaser.Scene {
         // Lower = smoother/slower trailing, Higher = snappier. 1.0 = instant.
         // 0.1 gives a nice cinematic chase-camera feel — the ship leads slightly
         // and the camera gracefully catches up, creating a sense of speed.
+        //
+        // IMPORTANT: No dead zone is set. A dead zone (even a small one) creates
+        // a "band" where the ship moves but the camera doesn't, which combined
+        // with lerp causes micro-hesitations that feel like inconsistent speed.
+        // With no dead zone, the camera is ALWAYS smoothly chasing the ship at
+        // exactly the same rate, everywhere in the world.
         cam.startFollow(this.player.getGameObject(), false, 0.1, 0.1);
-
-        // Deadzone: a tiny area in the center of the screen where the player
-        // can move without the camera moving. Kept very small (20px) to prevent
-        // micro-jitters but avoid the "mud wall" effect a large deadzone creates.
-        cam.setDeadzone(20, 20);
 
         // =========================================================
         // AMBIENT ATMOSPHERE — Slight vignette/tint
