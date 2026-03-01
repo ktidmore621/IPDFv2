@@ -36,13 +36,17 @@
     <!-- Utilities first (no dependencies) -->
     <script src="src/utils/VectorGraphics.js"></script>
 
+    <!-- World generators (depend on utilities) -->
+    <script src="src/world/TerrainGenerator.js"></script>
+    <script src="src/world/FormationGenerator.js"></script>
+
     <!-- Systems (may depend on utilities) -->
     <script src="src/systems/InputManager.js"></script>
 
     <!-- Entities (may depend on utilities) -->
     <script src="src/entities/PlayerShip.js"></script>
 
-    <!-- Scenes (depend on entities and systems) -->
+    <!-- Scenes (depend on entities, systems, and world generators) -->
     <script src="src/scenes/BattleScene.js"></script>
 
     <!-- Main entry point (depends on everything above) -->

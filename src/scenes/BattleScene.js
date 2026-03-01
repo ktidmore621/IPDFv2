@@ -2,14 +2,22 @@
  * BattleScene.js — Main Gameplay Scene
  *
  * This is where the game happens. It creates:
- *   - The game world (10,000 x 3,000 pixels)
- *   - A multi-layer parallax sky/background with stars and mountains
+ *   - The game world (12,000 x 3,000 pixels)
+ *   - A rich alien sky with nebula clouds and atmospheric haze
+ *   - Multi-layer parallax mountains for depth
+ *   - Procedurally generated terrain with geological layers
+ *   - Voidheart Ore veins glowing inside the rock
+ *   - Geological formations (spires, arches, mesas, crystals)
  *   - The player ship
  *   - The input manager
  *   - The camera that follows the player
  *
  * Think of a Scene like a "screen" or "level" in the game.
  * BattleScene is the main flight-and-combat screen.
+ *
+ * Layer order (back to front):
+ *   sky/nebula → stars → distant mountains → mid mountains →
+ *   near mountains → terrain + formations → player ship → UI overlay
  */
 
 class BattleScene extends Phaser.Scene {
@@ -21,7 +29,7 @@ class BattleScene extends Phaser.Scene {
 
     /**
      * create() is called once when the scene starts.
-     * This is where we build everything: background, player, camera, etc.
+     * This is where we build everything: background, terrain, player, camera, etc.
      */
     create() {
         // =========================================================
@@ -37,18 +45,34 @@ class BattleScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
 
         // =========================================================
-        // BACKGROUND — Parallax Sky Layers
+        // SKY — Rich alien atmosphere with nebula and haze
         // =========================================================
-        // We create multiple background layers that scroll at different speeds.
-        // Layers farther "away" scroll slower, creating a sense of depth.
-        // This is called "parallax scrolling."
-
-        this._createBackground();
+        this._createSky();
 
         // =========================================================
-        // GROUND — Simple ground line at the bottom of the world
+        // STARS — Scattered across the upper sky
         // =========================================================
-        this._createGround();
+        this._createStars();
+
+        // =========================================================
+        // PARALLAX MOUNTAINS — Background depth layers
+        // =========================================================
+        this._createMountainLayers();
+
+        // =========================================================
+        // ATMOSPHERIC HAZE — Horizon line effect
+        // =========================================================
+        this._createAtmosphericHaze();
+
+        // =========================================================
+        // TERRAIN — Procedurally generated alien ground
+        // =========================================================
+        this._createTerrain();
+
+        // =========================================================
+        // GEOLOGICAL FORMATIONS — Spires, arches, mesas, crystals
+        // =========================================================
+        this._createFormations();
 
         // =========================================================
         // PLAYER SHIP
@@ -102,42 +126,120 @@ class BattleScene extends Phaser.Scene {
         this._createAtmosphereOverlay();
     }
 
+    // =====================================================================
+    // SKY SYSTEM — Rich alien atmosphere
+    // =====================================================================
+
     /**
-     * Creates the multi-layer parallax background.
-     *
-     * Layers (from back to front):
-     *   1. Deep sky gradient (dark blue/purple — farthest away, no scroll)
-     *   2. Stars (tiny dots, very slow scroll)
-     *   3. Distant mountains (dark silhouettes, slow scroll)
-     *   4. Mid mountains (slightly brighter silhouettes, medium scroll)
-     *   5. Near formations (closest silhouettes, faster scroll)
+     * Creates the sky gradient and nebula clouds.
+     * The gradient goes from deep purple at the top to dark amber near
+     * the bottom, with subtle color band shifts for richness.
+     * Nebula clouds are large, soft, translucent shapes in the upper sky.
      */
-    _createBackground() {
-        // --- Layer 1: Sky gradient ---
-        // A tall rectangle that covers the entire world, filled with a
-        // dark gradient from deep blue (top) to dark purple (bottom).
-        // setScrollFactor(0) means it doesn't move with the camera at all.
+    _createSky() {
+        const gameHeight = this.scale.height;
+        const gameWidth = this.scale.width;
+
+        // --- Sky gradient ---
+        // A rich gradient from near-black purple at top to dark amber at bottom.
+        // setScrollFactor(0) means it stays fixed — the sky doesn't move.
         const skyGraphic = this.add.graphics();
         skyGraphic.setDepth(-100);
         skyGraphic.setScrollFactor(0);
 
-        // Draw the gradient by layering thin horizontal bars
-        // from dark blue at the top to dark purple-brown at the bottom
-        const gameHeight = this.scale.height;
-        const gameWidth = this.scale.width;
         for (let y = 0; y < gameHeight; y++) {
-            // Interpolate between top color and bottom color
             const t = y / gameHeight;
-            // Top: deep dark blue (0x0a0a1a) → Bottom: dark maroon-purple (0x1a0a0a)
-            const r = Math.floor(10 + t * 16);
-            const g = Math.floor(10 - t * 4);
-            const b = Math.floor(26 - t * 16);
-            const color = (r << 16) | (g << 8) | b;
+
+            // Three-stage gradient for richer color:
+            //   Top (t=0):    deep dark purple-black (0x08061a)
+            //   Middle (t=0.5): dark blue-purple (0x140a20)
+            //   Bottom (t=1):  dark amber-brown (0x1a1008)
+            let r, g, b;
+
+            if (t < 0.5) {
+                // Top half: dark purple-black to blue-purple
+                const s = t / 0.5;
+                r = Math.floor(8 + s * 12);
+                g = Math.floor(6 + s * 4);
+                b = Math.floor(26 + s * 6);
+            } else {
+                // Bottom half: blue-purple to dark amber
+                const s = (t - 0.5) / 0.5;
+                r = Math.floor(20 + s * 6);
+                g = Math.floor(10 - s * 2);
+                b = Math.floor(32 - s * 24);
+            }
+
+            // Add subtle color band ripples — small sine wave shifts
+            // that create barely-visible horizontal bands in the gradient
+            const bandShift = Math.sin(t * 20) * 2 + Math.sin(t * 7) * 3;
+            r = Math.max(0, Math.min(255, r + Math.floor(bandShift)));
+
+            const color = (r << 16) | (Math.max(0, g) << 8) | Math.max(0, b);
             skyGraphic.fillStyle(color, 1);
             skyGraphic.fillRect(0, y, gameWidth, 1);
         }
 
-        // --- Layer 2: Stars ---
+        // --- Nebula clouds ---
+        // 3-5 large, soft, translucent cloud shapes in the upper sky.
+        // Fixed to the camera (scrollFactor 0) — they're in deep space.
+        this._createNebulaClouds();
+    },
+
+    /**
+     * Creates soft nebula cloud shapes in the upper sky.
+     * Each nebula is a cluster of overlapping ellipses at very low opacity,
+     * creating a soft, blurry appearance.
+     */
+    _createNebulaClouds() {
+        const gameWidth = this.scale.width;
+        const gameHeight = this.scale.height;
+
+        // Nebula colors: deep purples, toxic ambers, dark reds
+        const nebulaColors = [
+            { color: 0x4a1a4a, alpha: 0.08 },  // Deep purple
+            { color: 0x6b2a1a, alpha: 0.06 },  // Dark red-brown
+            { color: 0x3a2a10, alpha: 0.07 },  // Toxic amber
+            { color: 0x2a1a3a, alpha: 0.10 },  // Violet
+            { color: 0x5a1a2a, alpha: 0.05 }   // Crimson
+        ];
+
+        const nebulaCount = 3 + Math.floor(Math.random() * 3);  // 3-5 nebulae
+
+        for (let n = 0; n < nebulaCount; n++) {
+            const nebula = this.add.graphics();
+            nebula.setDepth(-98);
+            nebula.setScrollFactor(0);  // Fixed — deep space, doesn't move
+
+            // Pick a color for this nebula
+            const nColor = nebulaColors[n % nebulaColors.length];
+
+            // Position in the upper portion of the sky
+            const centerX = gameWidth * 0.15 + Math.random() * gameWidth * 0.7;
+            const centerY = gameHeight * 0.1 + Math.random() * gameHeight * 0.4;
+
+            // Each nebula is made of several overlapping ellipses
+            // for a soft, blurred look
+            const blobCount = 4 + Math.floor(Math.random() * 4);
+            for (let b = 0; b < blobCount; b++) {
+                const bx = centerX + (Math.random() - 0.5) * 200;
+                const by = centerY + (Math.random() - 0.5) * 100;
+                const bw = 100 + Math.random() * 250;
+                const bh = 60 + Math.random() * 120;
+
+                nebula.fillStyle(nColor.color, nColor.alpha);
+                nebula.fillEllipse(bx, by, bw, bh);
+            }
+        }
+    },
+
+    /**
+     * Creates stars scattered across the upper sky.
+     * Includes the original stars plus a few brighter ones with
+     * a subtle twinkle effect (slow alpha oscillation).
+     */
+    _createStars() {
+        // --- Regular stars ---
         // Scattered across the sky. Small dots at varying brightness.
         // Very slow scroll factor (0.05) — they barely move.
         const starsGraphic = this.add.graphics();
@@ -153,7 +255,51 @@ class BattleScene extends Phaser.Scene {
             VectorGraphics.drawStar(starsGraphic, sx, sy, size, alpha);
         }
 
-        // --- Layer 3: Distant mountains (far background) ---
+        // --- Bright twinkling stars ---
+        // A few larger, brighter stars that slowly pulse in brightness.
+        // Each is its own Graphics object so it can be individually tweened.
+        const twinkleCount = 8 + Math.floor(Math.random() * 5);
+        for (let i = 0; i < twinkleCount; i++) {
+            const star = this.add.graphics();
+            star.setDepth(-89);
+            star.setScrollFactor(0.05);
+
+            const sx = Math.random() * this.worldWidth;
+            const sy = Math.random() * this.worldHeight * 0.5;
+            const size = 1.5 + Math.random() * 2;
+
+            // Draw a brighter star with more glow
+            star.fillStyle(0xffffff, 0.2);
+            star.fillCircle(sx, sy, size * 3);
+            star.fillStyle(0xeeeeff, 0.5);
+            star.fillCircle(sx, sy, size * 1.5);
+            star.fillStyle(0xffffff, 0.9);
+            star.fillCircle(sx, sy, size);
+
+            // Twinkle animation — slow alpha pulse
+            this.tweens.add({
+                targets: star,
+                alpha: { from: 0.5, to: 1.0 },
+                duration: 1000 + Math.random() * 3000,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut',
+                delay: Math.random() * 2000
+            });
+        }
+    },
+
+    // =====================================================================
+    // PARALLAX MOUNTAINS — Background depth layers
+    // =====================================================================
+
+    /**
+     * Creates the three parallax mountain layers.
+     * These sit between the sky and the terrain, at different scroll speeds.
+     * They should visually be on TOP of the terrain (in the mid-ground).
+     */
+    _createMountainLayers() {
+        // --- Layer 1: Distant mountains (far background) ---
         // Very dark, barely visible silhouettes. Slow scroll.
         this._createMountainLayer({
             depth: -80,
@@ -167,7 +313,7 @@ class BattleScene extends Phaser.Scene {
             maxWidth: 4000
         });
 
-        // --- Layer 4: Mid mountains ---
+        // --- Layer 2: Mid mountains ---
         // Slightly brighter, medium scroll speed
         this._createMountainLayer({
             depth: -70,
@@ -181,7 +327,7 @@ class BattleScene extends Phaser.Scene {
             maxWidth: 3000
         });
 
-        // --- Layer 5: Near formations ---
+        // --- Layer 3: Near formations ---
         // Most visible silhouettes, faster scroll
         this._createMountainLayer({
             depth: -60,
@@ -194,7 +340,7 @@ class BattleScene extends Phaser.Scene {
             minWidth: 1000,
             maxWidth: 2500
         });
-    }
+    },
 
     /**
      * Creates a single layer of mountain/formation silhouettes.
@@ -229,59 +375,97 @@ class BattleScene extends Phaser.Scene {
             mountain.setDepth(config.depth);
             mountain.setScrollFactor(config.scrollFactor);
         }
-    }
+    },
+
+    // =====================================================================
+    // ATMOSPHERIC HAZE — Horizon effect
+    // =====================================================================
 
     /**
-     * Creates a simple ground area at the bottom of the world.
-     * This is a dark, rocky surface with subtle detail.
+     * Creates a thin atmospheric haze band near the horizon line
+     * where sky meets ground. Suggests the planet has an atmosphere.
+     * This is a translucent horizontal band that scrolls with the
+     * near-mountains parallax layer so it feels like it's at the
+     * right depth.
      */
-    _createGround() {
-        const groundHeight = 200;
-        const groundY = this.worldHeight - groundHeight;
+    _createAtmosphericHaze() {
+        const haze = this.add.graphics();
+        haze.setDepth(-55);  // Between near mountains and terrain
+        haze.setScrollFactor(0.5, 1);  // Slow horizontal scroll, normal vertical
 
-        const ground = this.add.graphics();
-        ground.setDepth(-10);
+        // The haze sits just above where the terrain typically starts.
+        // The terrain ground base is around worldHeight * 0.82.
+        const hazeY = this.worldHeight * 0.68;
+        const hazeHeight = 140;
 
-        // Main ground fill — dark rocky color
-        ground.fillStyle(0x1a1410, 1);
-        ground.fillRect(0, groundY, this.worldWidth, groundHeight);
+        // Draw several semi-transparent bands for a gradient haze effect
+        // (More opaque in the middle, fading to transparent at top and bottom)
+        for (let i = 0; i < hazeHeight; i++) {
+            const t = i / hazeHeight;
+            // Bell curve opacity: peaks in the middle, fades at edges
+            const alpha = 0.08 * Math.sin(t * Math.PI);
 
-        // Slightly lighter top edge to suggest a ridge line
-        ground.fillStyle(0x2a2420, 1);
-        ground.fillRect(0, groundY, this.worldWidth, 4);
-
-        // Scattered rocks / texture dots across the ground
-        for (let i = 0; i < 200; i++) {
-            const rx = Math.random() * this.worldWidth;
-            const ry = groundY + 10 + Math.random() * (groundHeight - 20);
-            const size = 2 + Math.random() * 6;
-            const shade = 0x100c08 + Math.floor(Math.random() * 0x0a0a0a);
-            ground.fillStyle(shade, 0.5);
-            ground.fillRect(rx, ry, size, size * 0.6);
+            // Warm amber-purple haze color
+            haze.fillStyle(0x2a1a20, alpha);
+            haze.fillRect(0, hazeY + i, this.worldWidth * 1.5, 1);
         }
+    },
 
-        // A few glowing Voidheart Ore veins in the ground (purple-red with gold)
-        // These are just visual hints — not interactive yet
-        for (let i = 0; i < 15; i++) {
-            const vx = 500 + Math.random() * (this.worldWidth - 1000);
-            const vy = groundY + 20 + Math.random() * (groundHeight - 40);
-            const vLen = 30 + Math.random() * 80;
+    // =====================================================================
+    // TERRAIN — Procedurally generated alien ground
+    // =====================================================================
 
-            // Purple-red ore vein
-            ground.lineStyle(2, 0x8b2252, 0.7);
-            ground.beginPath();
-            ground.moveTo(vx, vy);
-            ground.lineTo(vx + vLen, vy + (Math.random() - 0.5) * 20);
-            ground.strokePath();
+    /**
+     * Generates and draws the procedural terrain using TerrainGenerator.
+     * This replaces the old flat ground from Phase 1 with a rich,
+     * uneven landscape with geological layers and glowing ore veins.
+     */
+    _createTerrain() {
+        // The "base" Y position for the ground — where it averages out to.
+        // This is roughly where the old flat ground was.
+        const groundBaseY = this.worldHeight * 0.82;
 
-            // Gold accent
-            ground.lineStyle(1, 0xdaa520, 0.5);
-            ground.beginPath();
-            ground.moveTo(vx + 5, vy + 2);
-            ground.lineTo(vx + vLen * 0.6, vy + 2 + (Math.random() - 0.5) * 10);
-            ground.strokePath();
-        }
-    }
+        // Step 1: Generate the height map (array of Y values across world width)
+        this.heightMap = TerrainGenerator.generateHeightMap(
+            this.worldWidth, this.worldHeight, groundBaseY
+        );
+
+        // Step 2: Draw the rock body (main terrain mass with geological striations)
+        this.rockBody = TerrainGenerator.createRockBody(
+            this, this.heightMap, this.worldWidth, this.worldHeight
+        );
+
+        // Step 3: Draw the Voidheart Ore veins (before surface crust so some
+        // veins peek through the crust edge)
+        this.oreVeins = TerrainGenerator.createVoidheartOreVeins(
+            this, this.heightMap, this.worldWidth, this.worldHeight
+        );
+
+        // Step 4: Draw the surface crust (thin top layer with rough edge)
+        this.surfaceCrust = TerrainGenerator.createSurfaceCrust(
+            this, this.heightMap, this.worldWidth
+        );
+    },
+
+    // =====================================================================
+    // GEOLOGICAL FORMATIONS — Natural rock features
+    // =====================================================================
+
+    /**
+     * Generates geological formations (spires, arches, mesas, crystals)
+     * scattered across the terrain surface using FormationGenerator.
+     */
+    _createFormations() {
+        // Generate all formations. They'll be placed at the correct
+        // terrain surface height automatically.
+        this.formations = FormationGenerator.generateFormations(
+            this, this.heightMap, this.worldWidth
+        );
+    },
+
+    // =====================================================================
+    // ATMOSPHERE OVERLAY — Vignette effect
+    // =====================================================================
 
     /**
      * Creates a subtle atmosphere overlay — a vignette effect around the
@@ -312,7 +496,11 @@ class BattleScene extends Phaser.Scene {
         // Right edge — semi-transparent black strip
         overlay.fillStyle(0x000000, 0.2);
         overlay.fillRect(w - 60, 0, 60, h);
-    }
+    },
+
+    // =====================================================================
+    // GAME LOOP
+    // =====================================================================
 
     /**
      * update() is called every frame (typically 60 times per second).
