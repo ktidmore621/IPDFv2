@@ -1,11 +1,11 @@
 /**
  * PlayerShip.js — The player's fighter ship entity
  *
- * This class manages the player's ship: its visual appearance (drawn with
- * vector graphics), its physics body, movement, and rotation.
+ * This class manages the player's ship: its visual appearance (loaded
+ * from a PNG sprite), its physics body, movement, and rotation.
  *
  * The ship is a Phaser Container that holds:
- *   - The ship graphic (drawn by VectorGraphics.drawPlayerShip)
+ *   - The ship sprite (loaded from assets/sprites/ — strikewing by default)
  *   - The engine thrust flame (drawn by VectorGraphics.drawThrustFlame)
  *
  * The ship faces its movement direction (keyboard) or the right-stick
@@ -21,9 +21,12 @@ class PlayerShip {
      * @param {Phaser.Scene} scene — The scene this ship belongs to
      * @param {number} x — Starting X position in world coordinates
      * @param {number} y — Starting Y position in world coordinates
+     * @param {string} [shipType='strikewing'] — Which ship sprite to use
+     *                 ('strikewing', 'tempest', or 'hammerfall')
      */
-    constructor(scene, x, y) {
+    constructor(scene, x, y, shipType = 'strikewing') {
         this.scene = scene;
+        this.shipType = shipType;
 
         // --- Ship stats ---
         // These control how the ship moves. Tweak these to change the "feel."
@@ -31,18 +34,27 @@ class PlayerShip {
         this.acceleration = 800;      // How quickly it gets up to speed
         this.drag = 1200;             // How quickly it slows down when not moving (high = snappy stop, low = floaty/icy)
 
-        // --- Draw the ship graphic ---
-        this.shipGraphic = VectorGraphics.drawPlayerShip(scene);
+        // --- Ship sprite scale ---
+        // The raw PNGs are 576x434. We scale them down to fit the game world.
+        // At 0.2 scale, the ship is roughly 115x87 pixels — detailed enough
+        // to see the art, small enough to navigate the battlefield.
+        this.spriteScale = 0.2;
+
+        // --- Create the ship sprite from the loaded PNG ---
+        // This replaces the old vector-drawn ship. The sprite is centered at
+        // (0, 0) so it rotates around its center, just like the old graphics.
+        this.shipGraphic = scene.add.image(0, 0, shipType);
+        this.shipGraphic.setScale(this.spriteScale);
 
         // --- Draw the engine thrust flame ---
-        // Positioned behind the ship (at the engine exhaust)
+        // Still vector-drawn since it animates (flickers/scales each frame).
+        // Positioned behind the ship at the engine exhaust area.
         this.thrustFlame = VectorGraphics.drawThrustFlame(scene);
-        this.thrustFlame.setPosition(-28, 0);  // Behind the ship's engines
+        this.thrustFlame.setPosition(-48, 0);  // Behind the ship's engines (adjusted for larger sprite)
         this.thrustFlame.setVisible(false);     // Hidden when not thrusting
 
-        // --- Create a container to hold both graphics ---
+        // --- Create a container to hold both the sprite and flame ---
         // A container lets us move and rotate the ship + flame together as one unit.
-        // We use a container (not a sprite) because our art is drawn with Graphics objects.
         this.container = scene.add.container(x, y, [this.thrustFlame, this.shipGraphic]);
 
         // --- Add physics to the container ---
@@ -50,9 +62,11 @@ class PlayerShip {
         scene.physics.world.enable(this.container);
 
         // Set up the physics body
-        // The body is the invisible collision box that the physics engine uses
-        this.container.body.setSize(56, 40);        // Collision box size (slightly smaller than visual)
-        this.container.body.setOffset(-28, -20);     // Center the collision box on the container
+        // The body is the invisible collision box that the physics engine uses.
+        // Sized to cover the core hull of the ship, not the full sprite
+        // (wings and gun barrels extend beyond the hitbox — feels fairer).
+        this.container.body.setSize(70, 50);        // Collision box size (core hull area)
+        this.container.body.setOffset(-35, -25);     // Center the collision box on the container
         this.container.body.setMaxVelocity(this.maxSpeed, this.maxSpeed);
         this.container.body.setDrag(this.drag, this.drag);
         this.container.body.setCollideWorldBounds(true);  // Can't fly off the map edge
@@ -171,18 +185,22 @@ class PlayerShip {
     }
 
     /**
-     * Flash the ship white/bright for 100ms as hit feedback.
+     * Flash the ship white for 100ms as hit feedback.
+     * Uses setTintFill to turn the entire sprite solid white,
+     * which is a clear "I got hit" signal. clearTint restores
+     * the original sprite colors.
      */
     _triggerDamageFlash() {
         if (this._isFlashing) return;
         this._isFlashing = true;
 
-        // Make the ship very bright (alpha boost)
-        this.shipGraphic.setAlpha(3.0);
+        // Turn the whole sprite solid white (tint fill covers all pixels)
+        this.shipGraphic.setTintFill(0xffffff);
 
         this.scene.time.delayedCall(100, () => {
             if (!this.isDead) {
-                this.shipGraphic.setAlpha(1.0);
+                // Remove the tint to restore normal ship colors
+                this.shipGraphic.clearTint();
             }
             this._isFlashing = false;
         });

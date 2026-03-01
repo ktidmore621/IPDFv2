@@ -29,6 +29,18 @@ class BattleScene extends Phaser.Scene {
     }
 
     /**
+     * preload() is called before create(). This is where we load external
+     * assets like images, audio, etc. All three ship sprites are loaded here
+     * so they're ready when the scene starts. Strikewing is the default ship
+     * until ship selection is added in Phase 5.
+     */
+    preload() {
+        this.load.image('strikewing', 'assets/sprites/strikewing.png');
+        this.load.image('tempest', 'assets/sprites/tempest.png');
+        this.load.image('hammerfall', 'assets/sprites/hammerfall.png');
+    }
+
+    /**
      * create() is called once when the scene starts.
      * This is where we build everything: background, terrain, player, camera, etc.
      */
