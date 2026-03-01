@@ -108,7 +108,7 @@ const VectorGraphics = {
     },
 
     /**
-     * Draws a simple engine thrust flame effect.
+     * Draws a simple engine thrust flame effect (legacy — kept for reference).
      * Called separately so it can be animated (flickered, scaled).
      *
      * Drawn at (0, 0) — position it behind the ship.
@@ -134,6 +134,69 @@ const VectorGraphics = {
         g.moveTo(0, -3);
         g.lineTo(-10, 0);
         g.lineTo(0, 3);
+        g.closePath();
+        g.fillPath();
+
+        return g;
+    },
+
+    /**
+     * Draws a large engine booster flame for the PNG ship sprites.
+     * Uses cyan/blue inner color with a lighter blue-white outer glow
+     * to match the IPDF ship aesthetic (the ship has cyan accent lights).
+     *
+     * The flame is drawn extending to the LEFT (negative X) from (0, 0),
+     * so when placed behind the ship it trails out the back.
+     *
+     * The flame is built from three overlapping tapered shapes:
+     *   1. Outer glow — large, soft, translucent light-blue halo
+     *   2. Mid flame — bright cyan body
+     *   3. Inner core — white-hot center streak
+     *
+     * Each layer uses a pointed flame shape that narrows toward the tip.
+     * The caller animates this by changing scaleX/scaleY and alpha each frame.
+     *
+     * @param {Phaser.Scene} scene — The scene to create the graphics in
+     * @returns {Phaser.GameObjects.Graphics} — The engine flame graphic
+     */
+    drawEngineFlame: function (scene) {
+        const g = scene.add.graphics();
+
+        // --- Layer 1: Outer glow (large, soft, translucent blue-white) ---
+        // This is the widest layer — gives the flame a "radiating light" feel.
+        // Semi-transparent so it looks like light bleeding outward.
+        g.fillStyle(0x88ccff, 0.18);
+        g.beginPath();
+        g.moveTo(4, -9);        // Top-right (slightly overlaps exhaust port)
+        g.lineTo(-36, -3);      // Narrows toward flame tip
+        g.lineTo(-42, 0);       // Flame tip (furthest point behind ship)
+        g.lineTo(-36, 3);       // Narrows back
+        g.lineTo(4, 9);         // Bottom-right
+        g.closePath();
+        g.fillPath();
+
+        // --- Layer 2: Mid flame body (bright cyan, the main visible flame) ---
+        // This is the core flame color — electric cyan matching the ship's accents.
+        g.fillStyle(0x00ddff, 0.5);
+        g.beginPath();
+        g.moveTo(2, -6);        // Top-right
+        g.lineTo(-28, -2);      // Tapers toward tip
+        g.lineTo(-34, 0);       // Flame tip
+        g.lineTo(-28, 2);       // Tapers back
+        g.lineTo(2, 6);         // Bottom-right
+        g.closePath();
+        g.fillPath();
+
+        // --- Layer 3: Inner core (white-hot center streak) ---
+        // The brightest part — narrow white line through the flame center.
+        // This gives the flame its "hottest point" right at the exhaust.
+        g.fillStyle(0xeeffff, 0.75);
+        g.beginPath();
+        g.moveTo(1, -3);        // Top-right (very narrow)
+        g.lineTo(-20, -1);      // Tapers to near-line
+        g.lineTo(-26, 0);       // Core tip
+        g.lineTo(-20, 1);       // Tapers back
+        g.lineTo(1, 3);         // Bottom-right
         g.closePath();
         g.fillPath();
 
