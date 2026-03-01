@@ -11,9 +11,25 @@
  * All terrain is generated once at scene creation time — nothing is
  * recalculated per frame. The ore vein pulse uses Phaser tweens for
  * efficient animation.
+ *
+ * --- MOBILE OPTIMIZATION (Phase 2 fix) ---
+ * The terrain is split into chunks no wider than 2048px. This prevents
+ * any single Graphics object or texture from exceeding mobile GPU limits
+ * (typically 4096px max texture size). Each chunk is drawn onto a temporary
+ * Graphics, baked into a RenderTexture, and the Graphics is destroyed.
+ * This means terrain renders as a handful of cheap textured quads instead
+ * of hundreds of live Graphics draw calls per frame.
+ *
+ * Chunk size of 2048px is conservative — safe even on older mobile devices.
+ * A 12,000px world creates 6 chunks.
  */
 
 const TerrainGenerator = {
+
+    // How wide each terrain chunk is in pixels.
+    // Must not exceed the minimum mobile max texture size (usually 4096).
+    // 2048 is safe for essentially all devices.
+    CHUNK_SIZE: 2048,
 
     /**
      * Generates the full terrain height map using multi-octave noise.
@@ -91,7 +107,7 @@ const TerrainGenerator = {
                     // Smooth crater shape using cosine falloff
                     const t = dx / craterWidth;
                     const dip = craterDepth * (0.5 + 0.5 * Math.cos(t * Math.PI));
-                    heightMap[px] += dip;  // Push terrain DOWN (higher Y = lower on screen... wait, no: higher Y = lower visually. Craters go down, so add to Y.)
+                    heightMap[px] += dip;  // Push terrain DOWN (higher Y = lower visually)
                 }
             }
         }
@@ -104,83 +120,107 @@ const TerrainGenerator = {
      * This draws the filled rock area below the surface line, complete
      * with horizontal striations that suggest geological strata.
      *
+     * --- MOBILE OPTIMIZATION ---
+     * Instead of one massive 12,000px-wide polygon (which exceeds mobile
+     * GPU texture limits), the terrain is split into 2048px-wide chunks.
+     * Each chunk is drawn to a temporary Graphics, baked into a
+     * RenderTexture, and the Graphics is destroyed. This means the terrain
+     * renders as ~6 simple textured quads instead of thousands of live
+     * path/stroke calls per frame.
+     *
      * @param {Phaser.Scene} scene — The game scene
      * @param {number[]} heightMap — The terrain height map from generateHeightMap
      * @param {number} worldWidth — World width in pixels
      * @param {number} worldHeight — World height in pixels
-     * @returns {Phaser.GameObjects.Graphics} — The rock body graphic
+     * @returns {Phaser.GameObjects.RenderTexture[]} — Array of terrain chunk RTs
      */
     createRockBody: function (scene, heightMap, worldWidth, worldHeight) {
-        const rock = scene.add.graphics();
-        rock.setDepth(-10);
-
-        // --- Draw the main rock fill ---
-        // We draw the terrain as a filled polygon: the top edge follows
-        // the heightMap, and the bottom/sides are straight lines along
-        // the world edges.
-        //
-        // Drawing every single pixel as a line would be thousands of
-        // lineTo calls. Instead, we sample every few pixels for performance.
+        const CHUNK_W = this.CHUNK_SIZE;
         const step = 4;  // Sample every 4 pixels (still smooth at 1920px view)
+        const chunks = [];
 
-        // Base rock color — dark gray-brown alien stone
-        rock.fillStyle(0x1a1410, 1);
-        rock.beginPath();
-        rock.moveTo(0, worldHeight);  // Bottom-left corner
+        for (let chunkStart = 0; chunkStart < worldWidth; chunkStart += CHUNK_W) {
+            const chunkEnd = Math.min(chunkStart + CHUNK_W, worldWidth);
+            const chunkW = chunkEnd - chunkStart;
 
-        // Trace the terrain surface from left to right
-        for (let x = 0; x < worldWidth; x += step) {
-            rock.lineTo(x, heightMap[x]);
-        }
-        // Make sure we reach the right edge
-        rock.lineTo(worldWidth - 1, heightMap[worldWidth - 1]);
+            // Find the highest terrain point (minimum Y) in this chunk
+            // so we know how tall the chunk's RenderTexture needs to be.
+            let minY = worldHeight;
+            for (let x = chunkStart; x < chunkEnd; x += step) {
+                if (heightMap[x] < minY) minY = heightMap[x];
+            }
+            minY = Math.floor(minY) - 20;  // 20px padding above highest point
+            const chunkH = worldHeight - minY;
 
-        // Close the shape along the bottom
-        rock.lineTo(worldWidth, worldHeight);  // Bottom-right corner
-        rock.closePath();
-        rock.fillPath();
+            // --- Draw this chunk's terrain onto a temporary Graphics ---
+            // All coordinates are relative to (0, 0) within this chunk.
+            const tempG = scene.add.graphics();
 
-        // --- Geological striations (horizontal layer lines) ---
-        // These are thin lines at different Y positions that suggest
-        // layers of rock built up over time — like a cliff face.
-        // We only draw them where they're visible (above the lowest point).
-        const minY = Math.min(...heightMap.filter((_, i) => i % 100 === 0));
-        const strataSpacing = 25;  // Pixels between each striation line
-        const strataColors = [0x1e1814, 0x161210, 0x201a14, 0x141010, 0x1c1610];
+            // Base rock color — dark gray-brown alien stone
+            tempG.fillStyle(0x1a1410, 1);
+            tempG.beginPath();
+            tempG.moveTo(0, chunkH);  // Bottom-left corner of chunk
 
-        for (let sy = minY + 20; sy < worldHeight; sy += strataSpacing) {
-            // Pick a slightly varied color for this layer
-            const color = strataColors[Math.floor((sy / strataSpacing) % strataColors.length)];
-            const alpha = 0.3 + Math.random() * 0.2;
+            // Trace the terrain surface from left to right within this chunk
+            for (let x = chunkStart; x < chunkEnd; x += step) {
+                tempG.lineTo(x - chunkStart, heightMap[x] - minY);
+            }
+            // Make sure we reach the right edge of the chunk
+            tempG.lineTo(chunkW, heightMap[Math.min(chunkEnd - 1, worldWidth - 1)] - minY);
+            tempG.lineTo(chunkW, chunkH);  // Bottom-right corner
+            tempG.closePath();
+            tempG.fillPath();
 
-            rock.lineStyle(1, color, alpha);
-            rock.beginPath();
+            // --- Geological striations (horizontal layer lines) ---
+            // Thin lines at different Y positions that suggest layers of rock.
+            // Only drawn where they're visible (inside the rock body).
+            const strataSpacing = 25;
+            const strataColors = [0x1e1814, 0x161210, 0x201a14, 0x141010, 0x1c1610];
 
-            let started = false;
-            for (let x = 0; x < worldWidth; x += step) {
-                // Only draw the striation where it's inside the rock (below surface)
-                if (sy > heightMap[x]) {
-                    if (!started) {
-                        rock.moveTo(x, sy);
-                        started = true;
+            for (let sy = minY + 20; sy < worldHeight; sy += strataSpacing) {
+                const localSY = sy - minY;  // Y relative to chunk top
+                const color = strataColors[Math.floor((sy / strataSpacing) % strataColors.length)];
+                const alpha = 0.3 + Math.random() * 0.2;
+
+                tempG.lineStyle(1, color, alpha);
+                tempG.beginPath();
+
+                let started = false;
+                for (let x = chunkStart; x < chunkEnd; x += step) {
+                    // Only draw where this Y is inside the rock (below surface)
+                    if (sy > heightMap[x]) {
+                        if (!started) {
+                            tempG.moveTo(x - chunkStart, localSY);
+                            started = true;
+                        } else {
+                            tempG.lineTo(x - chunkStart, localSY);
+                        }
                     } else {
-                        rock.lineTo(x, sy);
-                    }
-                } else {
-                    // Surface is above this striation Y — restart the line
-                    if (started) {
-                        rock.strokePath();
-                        rock.beginPath();
-                        started = false;
+                        // Surface is above this striation Y — restart the line
+                        if (started) {
+                            tempG.strokePath();
+                            tempG.beginPath();
+                            started = false;
+                        }
                     }
                 }
+                if (started) {
+                    tempG.strokePath();
+                }
             }
-            if (started) {
-                rock.strokePath();
-            }
+
+            // --- Bake to RenderTexture and destroy the temporary Graphics ---
+            // The RT is positioned at the chunk's world coordinates.
+            // Max size is 2048 x ~chunkH — well within mobile limits.
+            const rt = scene.add.renderTexture(chunkStart, minY, chunkW, chunkH);
+            rt.setDepth(-10);
+            rt.draw(tempG);
+            tempG.destroy();
+
+            chunks.push(rt);
         }
 
-        return rock;
+        return chunks;
     },
 
     /**
@@ -188,67 +228,104 @@ const TerrainGenerator = {
      * top edge of the terrain that looks like the planet's "skin."
      * It has a rough, jagged edge to suggest erosion and wear.
      *
+     * --- MOBILE OPTIMIZATION ---
+     * Chunked the same way as the rock body — each chunk is baked into
+     * a RenderTexture to avoid oversized Graphics objects.
+     *
      * @param {Phaser.Scene} scene — The game scene
      * @param {number[]} heightMap — The terrain height map
      * @param {number} worldWidth — World width in pixels
-     * @returns {Phaser.GameObjects.Graphics} — The crust graphic
+     * @returns {Phaser.GameObjects.RenderTexture[]} — Array of crust chunk RTs
      */
     createSurfaceCrust: function (scene, heightMap, worldWidth) {
-        const crust = scene.add.graphics();
-        crust.setDepth(-9);  // Just above the rock body
+        const CHUNK_W = this.CHUNK_SIZE;
+        const crustThickness = 12;
+        const step = 3;  // Slightly more detail than rock body
+        const chunks = [];
 
-        const crustThickness = 12;  // How thick the crust layer is (in pixels)
-        const step = 3;  // Sample every 3 pixels for slightly more detail than rock
+        for (let chunkStart = 0; chunkStart < worldWidth; chunkStart += CHUNK_W) {
+            const chunkEnd = Math.min(chunkStart + CHUNK_W, worldWidth);
+            const chunkW = chunkEnd - chunkStart;
 
-        // --- Main crust fill (slightly lighter than rock below) ---
-        crust.fillStyle(0x2a2420, 1);
-        crust.beginPath();
+            // Find the highest terrain point in this chunk (for RT sizing)
+            let minY = Infinity;
+            for (let x = chunkStart; x < chunkEnd; x += step) {
+                if (heightMap[x] < minY) minY = heightMap[x];
+            }
+            // Padding: crust sits on top of terrain, so go a bit higher
+            minY = Math.floor(minY) - 10;
+            // Crust only extends crustThickness below the surface + some jitter
+            // Find the lowest terrain point to size the chunk height
+            let maxY = 0;
+            for (let x = chunkStart; x < chunkEnd; x += step) {
+                const bottom = heightMap[x] + crustThickness + 10;
+                if (bottom > maxY) maxY = bottom;
+            }
+            maxY = Math.ceil(maxY) + 10;
+            const chunkH = maxY - minY;
 
-        // Top edge: follows the heightMap exactly
-        crust.moveTo(0, heightMap[0]);
-        for (let x = step; x < worldWidth; x += step) {
-            crust.lineTo(x, heightMap[x]);
+            const tempG = scene.add.graphics();
+
+            // --- Main crust fill (slightly lighter than rock below) ---
+            tempG.fillStyle(0x2a2420, 1);
+            tempG.beginPath();
+
+            // Top edge: follows the heightMap
+            tempG.moveTo(0, heightMap[Math.min(chunkStart, worldWidth - 1)] - minY);
+            for (let x = chunkStart + step; x < chunkEnd; x += step) {
+                tempG.lineTo(x - chunkStart, heightMap[x] - minY);
+            }
+            tempG.lineTo(chunkW - 1, heightMap[Math.min(chunkEnd - 1, worldWidth - 1)] - minY);
+
+            // Bottom edge: follows the heightMap pushed down by crustThickness,
+            // with small random jitter for a rough/jagged look
+            for (let x = chunkEnd - 1; x >= chunkStart; x -= step) {
+                const jitter = Math.sin(x * 0.05) * 3 + Math.sin(x * 0.13) * 2;
+                tempG.lineTo(x - chunkStart, heightMap[Math.min(x, worldWidth - 1)] + crustThickness + jitter - minY);
+            }
+            tempG.closePath();
+            tempG.fillPath();
+
+            // --- Surface edge highlight ---
+            // A thin bright line right along the top to give a crisp edge
+            tempG.lineStyle(2, 0x3a3430, 0.8);
+            tempG.beginPath();
+            tempG.moveTo(0, heightMap[Math.min(chunkStart, worldWidth - 1)] - minY);
+            for (let x = chunkStart + step; x < chunkEnd; x += step) {
+                tempG.lineTo(x - chunkStart, heightMap[x] - minY);
+            }
+            tempG.strokePath();
+
+            // --- Scattered surface rocks / debris along the top ---
+            // Small angular shapes sitting on the surface line.
+            // Scale rock count proportionally to chunk width (was 150 for full world).
+            const rockCount = Math.floor(150 * (chunkW / worldWidth));
+            for (let i = 0; i < rockCount; i++) {
+                const rx = Math.floor(Math.random() * chunkW);
+                const worldX = chunkStart + rx;
+                const ry = heightMap[Math.min(worldX, worldWidth - 1)] - minY;
+                const size = 3 + Math.random() * 8;
+
+                tempG.fillStyle(0x222018, 0.6 + Math.random() * 0.3);
+                tempG.beginPath();
+                tempG.moveTo(rx, ry);
+                tempG.lineTo(rx + size * 0.6, ry - size * 0.8);
+                tempG.lineTo(rx + size, ry - size * 0.2);
+                tempG.lineTo(rx + size * 0.8, ry + 2);
+                tempG.closePath();
+                tempG.fillPath();
+            }
+
+            // --- Bake to RenderTexture ---
+            const rt = scene.add.renderTexture(chunkStart, minY, chunkW, chunkH);
+            rt.setDepth(-9);  // Just above the rock body
+            rt.draw(tempG);
+            tempG.destroy();
+
+            chunks.push(rt);
         }
-        crust.lineTo(worldWidth - 1, heightMap[worldWidth - 1]);
 
-        // Bottom edge: follows the heightMap but pushed down by crustThickness,
-        // with small random jitter for a rough/jagged look
-        for (let x = worldWidth - 1; x >= 0; x -= step) {
-            const jitter = Math.sin(x * 0.05) * 3 + Math.sin(x * 0.13) * 2;
-            crust.lineTo(x, heightMap[x] + crustThickness + jitter);
-        }
-        crust.closePath();
-        crust.fillPath();
-
-        // --- Surface edge highlight ---
-        // A thin bright line right along the top to give a crisp edge
-        crust.lineStyle(2, 0x3a3430, 0.8);
-        crust.beginPath();
-        crust.moveTo(0, heightMap[0]);
-        for (let x = step; x < worldWidth; x += step) {
-            crust.lineTo(x, heightMap[x]);
-        }
-        crust.strokePath();
-
-        // --- Scattered surface rocks / debris along the top ---
-        // Small angular shapes sitting on the surface line
-        for (let i = 0; i < 150; i++) {
-            const rx = Math.floor(Math.random() * worldWidth);
-            const ry = heightMap[Math.min(rx, worldWidth - 1)];
-            const size = 3 + Math.random() * 8;
-
-            // Dark little rock shapes
-            crust.fillStyle(0x222018, 0.6 + Math.random() * 0.3);
-            crust.beginPath();
-            crust.moveTo(rx, ry);
-            crust.lineTo(rx + size * 0.6, ry - size * 0.8);
-            crust.lineTo(rx + size, ry - size * 0.2);
-            crust.lineTo(rx + size * 0.8, ry + 2);
-            crust.closePath();
-            crust.fillPath();
-        }
-
-        return crust;
+        return chunks;
     },
 
     /**
@@ -257,13 +334,14 @@ const TerrainGenerator = {
      * that pulse slowly (brightness animation via tweens).
      *
      * Each cluster is a separate Graphics object so it can be individually
-     * tweened for the pulse effect.
+     * tweened for the pulse effect. These are already small (200-400px wide)
+     * so they don't need chunking.
      *
      * @param {Phaser.Scene} scene — The game scene
      * @param {number[]} heightMap — The terrain height map
      * @param {number} worldWidth — World width in pixels
      * @param {number} worldHeight — World height in pixels
-     * @returns {Phaser.GameObjects.Graphics[]} — Array of ore vein graphics (for cleanup if needed)
+     * @returns {Phaser.GameObjects.Graphics[]} — Array of ore vein graphics
      */
     createVoidheartOreVeins: function (scene, heightMap, worldWidth, worldHeight) {
         const veins = [];
@@ -369,8 +447,8 @@ const TerrainGenerator = {
 
             // --- Pulse animation using Phaser tweens ---
             // Slowly oscillate the alpha of each ore cluster to create
-            // a "breathing" glow effect. Each cluster has a slightly different
-            // duration and delay so they don't all pulse in sync.
+            // a "breathing" glow effect. This tweens the alpha property
+            // on the existing Graphics object — no new textures created.
             scene.tweens.add({
                 targets: oreGraphic,
                 alpha: { from: 0.6, to: 1.0 },
