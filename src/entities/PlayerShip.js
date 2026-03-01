@@ -6,7 +6,8 @@
  *
  * The ship is a Phaser Container that holds:
  *   - The ship sprite (loaded from assets/sprites/ — strikewing by default)
- *   - The engine thrust flame (drawn by VectorGraphics.drawThrustFlame)
+ *   - Two engine booster flames (drawn by VectorGraphics.drawEngineFlame)
+ *     positioned at the upper and lower exhaust ports
  *
  * The ship faces its movement direction (keyboard) or the right-stick
  * aim direction (touch). Movement speed, drag, and acceleration are
@@ -46,16 +47,35 @@ class PlayerShip {
         this.shipGraphic = scene.add.image(0, 0, shipType);
         this.shipGraphic.setScale(this.spriteScale);
 
-        // --- Draw the engine thrust flame ---
-        // Still vector-drawn since it animates (flickers/scales each frame).
-        // Positioned behind the ship at the engine exhaust area.
-        this.thrustFlame = VectorGraphics.drawThrustFlame(scene);
-        this.thrustFlame.setPosition(-48, 0);  // Behind the ship's engines (adjusted for larger sprite)
-        this.thrustFlame.setVisible(false);     // Hidden when not thrusting
+        // --- Draw the two engine booster flames ---
+        // The ship sprite has two engine exhaust ports at the rear — one upper,
+        // one lower. Each gets its own animated flame graphic so they can
+        // flicker independently for a more organic, alive look.
+        //
+        // These are vector-drawn (not part of the PNG) because they need to
+        // animate every frame (scale, alpha changes for flickering).
+        //
+        // Positioning notes (at 0.2 scale, the sprite is ~115x87px centered at 0,0):
+        //   The rear of the ship is at roughly x = -57. The two engine nozzles
+        //   on the strikewing sprite sit at approximately y = -12 (upper) and
+        //   y = 12 (lower). We place the flames just behind the nozzle openings.
 
-        // --- Create a container to hold both the sprite and flame ---
-        // A container lets us move and rotate the ship + flame together as one unit.
-        this.container = scene.add.container(x, y, [this.thrustFlame, this.shipGraphic]);
+        // Upper engine flame
+        this.upperFlame = VectorGraphics.drawEngineFlame(scene);
+        this.upperFlame.setPosition(-48, -11);
+
+        // Lower engine flame
+        this.lowerFlame = VectorGraphics.drawEngineFlame(scene);
+        this.lowerFlame.setPosition(-48, 11);
+
+        // --- Create a container to hold the sprite and both flames ---
+        // A container lets us move and rotate the ship + flames together as one unit.
+        // Flames are added BEFORE the ship sprite so they render behind it.
+        this.container = scene.add.container(x, y, [
+            this.upperFlame,
+            this.lowerFlame,
+            this.shipGraphic
+        ]);
 
         // --- Add physics to the container ---
         // This gives the ship a physics body so it can move, collide, etc.
@@ -71,9 +91,16 @@ class PlayerShip {
         this.container.body.setDrag(this.drag, this.drag);
         this.container.body.setCollideWorldBounds(true);  // Can't fly off the map edge
 
-        // --- Thrust flame animation timer ---
-        // We'll flicker the flame to make it look alive
-        this.thrustFlickerTimer = 0;
+        // --- Engine flame animation state ---
+        // Two independent timers so the upper and lower flames flicker
+        // slightly out of sync (looks more organic than perfectly in-phase).
+        this.flameTimerUpper = 0;
+        this.flameTimerLower = Math.PI;  // Start half a cycle offset
+
+        // "flamePower" smoothly transitions between 0 (idle) and 1 (full thrust).
+        // This controls the flame size and brightness. We lerp it each frame
+        // so the flames don't pop instantly — they ramp up and die down.
+        this.flamePower = 0;
 
         // --- Track the angle the ship is facing ---
         // This is in radians. 0 = facing right, PI/2 = facing down, etc.
@@ -129,17 +156,69 @@ class PlayerShip {
         // Apply the rotation to the container (Phaser uses radians)
         this.container.setRotation(this.facingAngle);
 
-        // --- Animate the thrust flame ---
-        if (isMoving) {
-            this.thrustFlame.setVisible(true);
+        // --- Animate the engine booster flames ---
+        // Both flames are always visible (they show a small idle glow even
+        // when not moving). The "flamePower" value smoothly transitions
+        // between idle (0) and full thrust (1) over a few frames.
 
-            // Flicker the flame by changing its scale slightly each frame
-            this.thrustFlickerTimer += delta;
-            const flicker = 0.8 + 0.4 * Math.sin(this.thrustFlickerTimer * 0.015);
-            this.thrustFlame.setScale(flicker, 0.7 + 0.3 * Math.sin(this.thrustFlickerTimer * 0.02));
-        } else {
-            this.thrustFlame.setVisible(false);
-        }
+        // Lerp flamePower toward 1 (moving) or 0 (stationary).
+        // The lerp speed (0.08) means it takes roughly 12-15 frames to
+        // fully transition — fast enough to feel responsive, slow enough
+        // to look like real engines spooling up/down.
+        const targetPower = isMoving ? 1 : 0;
+        this.flamePower += (targetPower - this.flamePower) * 0.08;
+
+        // Advance the flicker timers (independent speeds for each flame)
+        this.flameTimerUpper += delta;
+        this.flameTimerLower += delta;
+
+        // --- Compute flicker values for each flame ---
+        // We combine two sine waves at different frequencies to create an
+        // irregular, organic-looking flicker rather than a smooth pulse.
+        // "fast" = rapid flicker (simulates turbulence)
+        // "slow" = gentle pulse (simulates thrust variation)
+        const upperFastFlicker = Math.sin(this.flameTimerUpper * 0.025);
+        const upperSlowPulse  = Math.sin(this.flameTimerUpper * 0.008);
+        const lowerFastFlicker = Math.sin(this.flameTimerLower * 0.022);
+        const lowerSlowPulse  = Math.sin(this.flameTimerLower * 0.009);
+
+        // --- Scale ranges ---
+        // Idle:  small glow  (scaleX 0.2–0.35, scaleY 0.3–0.45)
+        // Thrust: large flame (scaleX 0.8–1.2,  scaleY 0.7–1.1)
+        // We interpolate between idle and thrust based on flamePower.
+        const idleScaleX  = 0.25 + 0.1 * upperFastFlicker;
+        const idleScaleY  = 0.35 + 0.1 * upperSlowPulse;
+        const thrustScaleX = 0.9  + 0.3 * upperFastFlicker;
+        const thrustScaleY = 0.8  + 0.3 * upperSlowPulse;
+
+        const upperSX = idleScaleX + (thrustScaleX - idleScaleX) * this.flamePower;
+        const upperSY = idleScaleY + (thrustScaleY - idleScaleY) * this.flamePower;
+
+        // Lower flame uses its own flicker values (slightly different rhythm)
+        const idleScaleX2  = 0.25 + 0.1 * lowerFastFlicker;
+        const idleScaleY2  = 0.35 + 0.1 * lowerSlowPulse;
+        const thrustScaleX2 = 0.9  + 0.3 * lowerFastFlicker;
+        const thrustScaleY2 = 0.8  + 0.3 * lowerSlowPulse;
+
+        const lowerSX = idleScaleX2 + (thrustScaleX2 - idleScaleX2) * this.flamePower;
+        const lowerSY = idleScaleY2 + (thrustScaleY2 - idleScaleY2) * this.flamePower;
+
+        // --- Alpha ranges ---
+        // Idle:  dim glow   (alpha 0.25–0.4)
+        // Thrust: bright     (alpha 0.7–1.0)
+        const idleAlpha  = 0.3 + 0.1 * upperSlowPulse;
+        const thrustAlpha = 0.85 + 0.15 * upperFastFlicker;
+        const upperAlpha = idleAlpha + (thrustAlpha - idleAlpha) * this.flamePower;
+
+        const idleAlpha2  = 0.3 + 0.1 * lowerSlowPulse;
+        const thrustAlpha2 = 0.85 + 0.15 * lowerFastFlicker;
+        const lowerAlpha = idleAlpha2 + (thrustAlpha2 - idleAlpha2) * this.flamePower;
+
+        // Apply the computed scale and alpha to each flame
+        this.upperFlame.setScale(upperSX, upperSY);
+        this.upperFlame.setAlpha(upperAlpha);
+        this.lowerFlame.setScale(lowerSX, lowerSY);
+        this.lowerFlame.setAlpha(lowerAlpha);
     }
 
     /**
