@@ -178,13 +178,17 @@ class BattleScene extends Phaser.Scene {
         const gameHeight = this.scale.height;
         const gameWidth = this.scale.width;
 
-        // --- MOBILE OPTIMIZATION ---
-        // The sky (gradient + nebula clouds) is static and never changes.
-        // Instead of keeping 4-6 separate live Graphics objects that the GPU
-        // has to re-render every frame, we draw everything onto one temporary
-        // Graphics and then bake it into a single RenderTexture. This turns
-        // hundreds of per-frame draw calls into one cheap textured quad.
-        const tempG = this.add.graphics();
+        // The sky is one screen-sized Graphics object (1920x1080 — well within
+        // mobile GPU limits). It's fixed to the camera via scrollFactor(0).
+        //
+        // NOTE: We previously tried baking this into a RenderTexture for
+        // performance, but Phaser 4's Beam renderer can't capture unrendered
+        // Graphics via RenderTexture.draw() during create(). The Graphics
+        // commands are deferred, so the RT ends up empty (black). Keeping
+        // the Graphics object directly works reliably.
+        const skyG = this.add.graphics();
+        skyG.setDepth(-100);
+        skyG.setScrollFactor(0);  // Fixed to camera — always fills the screen
 
         // --- Sky gradient ---
         // A rich gradient from near-black purple at top to dark amber at bottom.
@@ -217,11 +221,11 @@ class BattleScene extends Phaser.Scene {
             r = Math.max(0, Math.min(255, r + Math.floor(bandShift)));
 
             const color = (r << 16) | (Math.max(0, g) << 8) | Math.max(0, b);
-            tempG.fillStyle(color, 1);
-            tempG.fillRect(0, y, gameWidth, 1);
+            skyG.fillStyle(color, 1);
+            skyG.fillRect(0, y, gameWidth, 1);
         }
 
-        // --- Nebula clouds (drawn on same temp Graphics) ---
+        // --- Nebula clouds (drawn on the same sky Graphics) ---
         // 3-5 large, soft, translucent cloud shapes in the upper sky.
         const nebulaColors = [
             { color: 0x4a1a4a, alpha: 0.08 },  // Deep purple
@@ -242,19 +246,10 @@ class BattleScene extends Phaser.Scene {
                 const by = centerY + (Math.random() - 0.5) * 100;
                 const bw = 100 + Math.random() * 250;
                 const bh = 60 + Math.random() * 120;
-                tempG.fillStyle(nColor.color, nColor.alpha);
-                tempG.fillEllipse(bx, by, bw, bh);
+                skyG.fillStyle(nColor.color, nColor.alpha);
+                skyG.fillEllipse(bx, by, bw, bh);
             }
         }
-
-        // --- Bake into a single RenderTexture ---
-        // This replaces 4-6 live Graphics objects with 1 static texture.
-        // The RT is screen-sized (1920x1080) which is well within mobile limits.
-        const skyRT = this.add.renderTexture(0, 0, gameWidth, gameHeight);
-        skyRT.setDepth(-100);
-        skyRT.setScrollFactor(0);
-        skyRT.draw(tempG);
-        tempG.destroy();
     }
 
     /**
@@ -414,37 +409,29 @@ class BattleScene extends Phaser.Scene {
      * right depth.
      */
     _createAtmosphericHaze() {
-        // --- MOBILE OPTIMIZATION ---
-        // The old haze was 18,000px wide (worldWidth * 1.5), which exceeds
-        // mobile max texture size and causes silent GPU failure.
-        // With scrollFactor 0.5, the haze only needs to cover:
-        //   screenWidth + (maxCameraScroll * scrollFactor)
-        //   = 1920 + (10080 * 0.5) = ~7000px
-        // We use 4096 to stay within mobile texture limits. The haze is
-        // a subtle visual effect, so slight edge clipping is unnoticeable.
+        // The haze is capped at 4096px wide to stay within mobile GPU texture
+        // limits (the old 18,000px width caused silent GPU failure on mobile).
+        // With scrollFactor 0.5, 4096px provides enough coverage.
         const hazeWidth = 4096;
-
-        // Also bake to a RenderTexture instead of keeping 140 live fillRect
-        // calls per frame. We use fewer, thicker bands (step of 4px instead of 1px)
-        // for even less overhead.
         const hazeHeight = 140;
         const hazeY = this.worldHeight * 0.68;
 
-        const tempG = this.add.graphics();
+        // Draw the haze directly on a Graphics object (no RT baking —
+        // see _createSky comment for why RT baking fails in Phaser 4).
+        // Position it at (0, hazeY) so the bands appear at the right
+        // world height. Uses 4px-tall bands for efficiency.
+        const hazeG = this.add.graphics();
+        hazeG.setDepth(-55);               // Between near mountains and terrain
+        hazeG.setScrollFactor(0.5, 1);     // Slow horizontal scroll, normal vertical
+        hazeG.setPosition(0, hazeY);       // Place at the horizon line
+
         for (let i = 0; i < hazeHeight; i += 4) {
             const t = i / hazeHeight;
             // Bell curve opacity: peaks in the middle, fades at edges
             const alpha = 0.08 * Math.sin(t * Math.PI);
-            tempG.fillStyle(0x2a1a20, alpha);
-            tempG.fillRect(0, i, hazeWidth, 4);  // 4px tall bands
+            hazeG.fillStyle(0x2a1a20, alpha);
+            hazeG.fillRect(0, i, hazeWidth, 4);  // 4px tall bands
         }
-
-        // Bake haze into a RenderTexture (4096 x 140 — mobile safe)
-        const hazeRT = this.add.renderTexture(0, hazeY, hazeWidth, hazeHeight);
-        hazeRT.setDepth(-55);  // Between near mountains and terrain
-        hazeRT.setScrollFactor(0.5, 1);  // Slow horizontal scroll, normal vertical
-        hazeRT.draw(tempG);
-        tempG.destroy();
     }
 
     // =====================================================================
