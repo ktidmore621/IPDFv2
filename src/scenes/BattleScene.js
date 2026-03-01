@@ -10,6 +10,7 @@
  *   - Geological formations (spires, arches, mesas, crystals)
  *   - The player ship
  *   - The input manager
+ *   - The weapon manager (PX-9 Plasma Array + CM-3 Cluster Missiles)
  *   - The camera that follows the player
  *
  * Think of a Scene like a "screen" or "level" in the game.
@@ -131,6 +132,14 @@ class BattleScene extends Phaser.Scene {
 
         // Create the input system — it reads keyboard and touch every frame
         this.inputManager = new InputManager(this);
+
+        // =========================================================
+        // WEAPON MANAGER (Phase 3 — PX-9 Plasma + CM-3 Cluster Missiles)
+        // =========================================================
+
+        // Create the weapon system — it manages projectile pools, firing,
+        // and cleanup. Needs references to the scene and player ship.
+        this.weaponManager = new WeaponManager(this, this.player);
 
         // =========================================================
         // CAMERA SETUP
@@ -540,7 +549,7 @@ class BattleScene extends Phaser.Scene {
      * @param {number} delta — Time since last frame in milliseconds
      */
     update(time, delta) {
-        // Step 1: Read all player inputs (keyboard + touch)
+        // Step 1: Read all player inputs (keyboard + touch + weapon buttons)
         this.inputManager.update();
 
         // Step 2: Update the player ship with the input vectors
@@ -549,5 +558,19 @@ class BattleScene extends Phaser.Scene {
             this.inputManager.moveVector,
             this.inputManager.aimVector
         );
+
+        // Step 3: Handle weapon firing based on input states
+        // Primary fire (PX-9 Plasma Array) — hold spacebar or right stick
+        if (this.inputManager.firePressed) {
+            this.weaponManager.firePlasma(time);
+        }
+
+        // Secondary fire (CM-3 Cluster Missile) — press E or double-tap right
+        if (this.inputManager.altFireJustPressed) {
+            this.weaponManager.fireClusterMissile(time);
+        }
+
+        // Step 4: Update all active projectiles (movement, distance checks, splits)
+        this.weaponManager.update(time, delta);
     }
 }
