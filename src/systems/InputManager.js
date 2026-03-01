@@ -1,5 +1,5 @@
 /**
- * InputManager.js — Keyboard + Touch Dual-Stick Controls
+ * InputManager.js — Keyboard + Touch Dual-Stick Controls + Weapon Inputs
  *
  * This system handles ALL player input. It supports two control schemes
  * that work simultaneously:
@@ -8,15 +8,21 @@
  *   - WASD or Arrow Keys for 360-degree movement
  *   - Ship faces the movement direction
  *   - No separate aim (aim = movement direction)
+ *   - Spacebar: fire PX-9 Plasma Array (hold for continuous fire)
+ *   - E key: fire CM-3 Cluster Missile
  *
  * TOUCH (mobile/tablet):
  *   - Left side of screen: movement joystick (virtual stick appears at touch point)
  *   - Right side of screen: aim joystick (ship faces where right stick points)
+ *   - Holding right joystick = continuous plasma fire in aim direction
+ *   - Double-tap right side = fire cluster missile
  *   - Joysticks appear as translucent circles when touched, disappear on release
  *
- * The InputManager provides two vectors each frame:
+ * The InputManager provides each frame:
  *   - moveVector: { x, y } — direction to move (-1 to 1 each axis, normalized)
  *   - aimVector: { x, y } — direction to aim (null if no aim input / keyboard only)
+ *   - firePressed: boolean — true if player is holding the fire button (plasma)
+ *   - altFireJustPressed: boolean — true on the single frame E or double-tap fires
  */
 
 class InputManager {
@@ -30,6 +36,10 @@ class InputManager {
         // --- Output vectors (read these each frame) ---
         this.moveVector = { x: 0, y: 0 };   // Movement direction
         this.aimVector = null;               // Aim direction (null = use moveVector)
+
+        // --- Weapon output states (read these each frame) ---
+        this.firePressed = false;            // True while fire button is held (plasma)
+        this.altFireJustPressed = false;     // True on the single frame of alt-fire
 
         // =========================================================
         // KEYBOARD SETUP
@@ -45,6 +55,15 @@ class InputManager {
             left: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
             right: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D)
         };
+
+        // --- Weapon keys ---
+        // Spacebar for plasma fire (also created by createCursorKeys — addKey
+        // returns the same Key object if it already exists, so no conflict)
+        this.spaceKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        // E key for cluster missile
+        this.eKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+        // Track previous frame's E key state for "just pressed" detection
+        this._eKeyWasDown = false;
 
         // =========================================================
         // TOUCH / VIRTUAL JOYSTICK SETUP
@@ -81,6 +100,14 @@ class InputManager {
             baseGraphic: null,
             knobGraphic: null
         };
+
+        // --- Double-tap tracking for touch cluster missile ---
+        // When the right side of the screen is tapped twice quickly,
+        // it fires a cluster missile. We track the timestamp of the
+        // last right-side pointerdown to detect this.
+        this._lastRightTapTime = 0;
+        this._doubleTapThreshold = 300;    // Max ms between taps to count as double-tap
+        this._doubleTapFired = false;      // Flag set by touch, consumed by update()
 
         // --- Create joystick visuals ---
         // These are drawn once and shown/hidden as needed.
@@ -152,9 +179,21 @@ class InputManager {
             if (screenX < screenMiddle && !this.leftStick.active) {
                 // Touch on the LEFT half — activate movement joystick
                 this._activateStick(this.leftStick, pointer);
-            } else if (screenX >= screenMiddle && !this.rightStick.active) {
-                // Touch on the RIGHT half — activate aim joystick
-                this._activateStick(this.rightStick, pointer);
+            } else if (screenX >= screenMiddle) {
+                // Touch on the RIGHT half
+
+                // --- Double-tap detection for cluster missile ---
+                // If two taps happen within 300ms on the right side, fire missile.
+                const now = this.scene.time.now;
+                if (now - this._lastRightTapTime < this._doubleTapThreshold) {
+                    this._doubleTapFired = true;
+                }
+                this._lastRightTapTime = now;
+
+                // Activate aim joystick if not already active
+                if (!this.rightStick.active) {
+                    this._activateStick(this.rightStick, pointer);
+                }
             }
         });
 
@@ -275,8 +314,9 @@ class InputManager {
     }
 
     /**
-     * Called every frame to read all inputs and update moveVector / aimVector.
-     * The PlayerShip reads these vectors to know where to go.
+     * Called every frame to read all inputs and update moveVector / aimVector
+     * plus weapon fire states. The PlayerShip reads movement vectors and
+     * BattleScene reads weapon states.
      */
     update() {
         // =========================================================
@@ -306,7 +346,7 @@ class InputManager {
         const touchAim = this._getStickVector(this.rightStick);
 
         // =========================================================
-        // COMBINE INPUTS
+        // COMBINE MOVEMENT INPUTS
         // =========================================================
         // Keyboard and touch movement add together. If both are used at once,
         // the combined vector is clamped so you can't go faster than max speed.
@@ -329,6 +369,39 @@ class InputManager {
             this.aimVector = { x: touchAim.x, y: touchAim.y };
         } else {
             this.aimVector = null;  // No aim override — ship faces movement direction
+        }
+
+        // =========================================================
+        // WEAPON INPUT
+        // =========================================================
+
+        // --- Primary fire (PX-9 Plasma) ---
+        // Spacebar on keyboard, OR right joystick held with direction on touch.
+        // This is a "hold to fire" input — true as long as the button is held.
+        this.firePressed = this.spaceKey.isDown;
+
+        // On touch: if the right stick is active and pointing in a direction
+        // (outside the dead zone), that also counts as holding fire.
+        if (this.rightStick.active && (touchAim.x !== 0 || touchAim.y !== 0)) {
+            this.firePressed = true;
+        }
+
+        // --- Secondary fire (CM-3 Cluster Missile) ---
+        // E key on keyboard (just pressed, not held), OR double-tap right side.
+        // This is a "just pressed" input — true for only one frame per press.
+        this.altFireJustPressed = false;
+
+        // Check E key: true only on the frame it transitions from up to down
+        const eDown = this.eKey.isDown;
+        if (eDown && !this._eKeyWasDown) {
+            this.altFireJustPressed = true;
+        }
+        this._eKeyWasDown = eDown;
+
+        // Check double-tap flag from touch pointerdown handler
+        if (this._doubleTapFired) {
+            this.altFireJustPressed = true;
+            this._doubleTapFired = false;  // Consume the flag (one frame only)
         }
     }
 }

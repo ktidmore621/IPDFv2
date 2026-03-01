@@ -38,9 +38,13 @@ ipdf-combat-chronicle/
 │   ├── entities/
 │   │   └── PlayerShip.js    (player ship class)
 │   ├── systems/
-│   │   └── InputManager.js  (keyboard + touch dual-stick controls)
-│   └── utils/
-│       └── VectorGraphics.js (helper functions for drawing vector shapes)
+│   │   ├── InputManager.js  (keyboard + touch dual-stick controls + weapon inputs)
+│   │   └── WeaponManager.js (weapon firing, projectile pools, PX-9 + CM-3 systems)
+│   ├── utils/
+│   │   └── VectorGraphics.js (helper functions for drawing vector shapes + projectiles)
+│   └── world/
+│       ├── TerrainGenerator.js  (procedural terrain with geological layers)
+│       └── FormationGenerator.js (spires, arches, mesas, crystal clusters)
 └── assets/                   (empty for now — all art is code-drawn)
 ```
 
@@ -58,8 +62,8 @@ ipdf-combat-chronicle/
 
 ## CONTROLS
 
-- **Keyboard:** WASD or Arrow Keys for 360-degree movement. Ship faces movement direction.
-- **Touch (mobile/tablet):** Dual virtual joysticks. Left side = movement. Right side = aim direction (ship faces where right stick points). Joysticks appear at touch point as translucent circles and disappear on release.
+- **Keyboard:** WASD or Arrow Keys for 360-degree movement. Ship faces movement direction. Spacebar fires PX-9 Plasma (hold for continuous). E fires CM-3 Cluster Missile.
+- **Touch (mobile/tablet):** Dual virtual joysticks. Left side = movement. Right side = aim direction (ship faces where right stick points). Holding right stick = continuous plasma fire. Double-tap right side = cluster missile. Joysticks appear at touch point as translucent circles and disappear on release.
 - Both control schemes work simultaneously.
 
 ## CAMERA & WORLD
@@ -100,8 +104,8 @@ ipdf-combat-chronicle/
 ## BUILD PHASES (for reference — only build what is currently requested)
 
 - Phase 1: Project setup, player ship, flight controls, camera, atmosphere ✅
-- Phase 2: Procedural terrain, Voidheart Ore veins, geological formations, full sky system
-- Phase 3: PX-9 Plasma Array and CM-3 Cluster Missiles (weapons)
+- Phase 2: Procedural terrain, Voidheart Ore veins, geological formations, full sky system ✅
+- Phase 3: PX-9 Plasma Array and CM-3 Cluster Missiles (weapons) ✅
 - Phase 4: Enemy ground structures (cannons, turrets, mining platforms, collision, damage)
 - Phase 5: Ship class selection and defensive ability systems
 - Phase 6: Nightfall Bomb gravity-arc mechanic
