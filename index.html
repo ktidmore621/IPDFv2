@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>IPDF Combat Chronicle</title>
+    <style>
+        /*
+         * Full-screen black background, no scrollbars.
+         * The game canvas will fill the browser window.
+         */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+
+        /* Prevent pull-to-refresh and bounce scrolling on mobile */
+        body {
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Phaser 4 loaded from CDN — no build step needed -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@4.0.0-rc.6/dist/phaser.min.js"></script>
+
+    <!-- Game source files — order matters since there's no bundler -->
+    <!-- Utilities first (no dependencies) -->
+    <script src="src/utils/VectorGraphics.js"></script>
+
+    <!-- Systems (may depend on utilities) -->
+    <script src="src/systems/InputManager.js"></script>
+
+    <!-- Entities (may depend on utilities) -->
+    <script src="src/entities/PlayerShip.js"></script>
+
+    <!-- Scenes (depend on entities and systems) -->
+    <script src="src/scenes/BattleScene.js"></script>
+
+    <!-- Main entry point (depends on everything above) -->
+    <script src="src/main.js"></script>
+</body>
+</html>
