@@ -255,7 +255,7 @@ class BattleScene extends Phaser.Scene {
         skyRT.setScrollFactor(0);
         skyRT.draw(tempG);
         tempG.destroy();
-    },
+    }
 
     /**
      * Creates stars scattered across the upper sky.
@@ -312,7 +312,7 @@ class BattleScene extends Phaser.Scene {
                 delay: Math.random() * 2000
             });
         }
-    },
+    }
 
     // =====================================================================
     // PARALLAX MOUNTAINS — Background depth layers
@@ -365,7 +365,7 @@ class BattleScene extends Phaser.Scene {
             minWidth: 1000,
             maxWidth: 2500
         });
-    },
+    }
 
     /**
      * Creates a single layer of mountain/formation silhouettes.
@@ -400,7 +400,7 @@ class BattleScene extends Phaser.Scene {
             mountain.setDepth(config.depth);
             mountain.setScrollFactor(config.scrollFactor);
         }
-    },
+    }
 
     // =====================================================================
     // ATMOSPHERIC HAZE — Horizon effect
@@ -445,7 +445,7 @@ class BattleScene extends Phaser.Scene {
         hazeRT.setScrollFactor(0.5, 1);  // Slow horizontal scroll, normal vertical
         hazeRT.draw(tempG);
         tempG.destroy();
-    },
+    }
 
     // =====================================================================
     // TERRAIN — Procedurally generated alien ground
@@ -481,7 +481,7 @@ class BattleScene extends Phaser.Scene {
         this.surfaceCrust = TerrainGenerator.createSurfaceCrust(
             this, this.heightMap, this.worldWidth
         );
-    },
+    }
 
     // =====================================================================
     // GEOLOGICAL FORMATIONS — Natural rock features
@@ -504,7 +504,7 @@ class BattleScene extends Phaser.Scene {
         this.formations = FormationGenerator.generateFormations(
             this, this.heightMap, this.worldWidth
         );
-    },
+    }
 
     // =====================================================================
     // ATMOSPHERE OVERLAY — Vignette effect
@@ -539,7 +539,7 @@ class BattleScene extends Phaser.Scene {
         // Right edge — semi-transparent black strip
         overlay.fillStyle(0x000000, 0.2);
         overlay.fillRect(w - 60, 0, 60, h);
-    },
+    }
 
     // =====================================================================
     // GAME LOOP
