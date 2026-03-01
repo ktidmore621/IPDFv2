@@ -29,7 +29,7 @@ class PlayerShip {
         // These control how the ship moves. Tweak these to change the "feel."
         this.maxSpeed = 400;          // Max pixels per second
         this.acceleration = 800;      // How quickly it gets up to speed
-        this.drag = 300;              // How quickly it slows down when not moving
+        this.drag = 1200;             // How quickly it slows down when not moving (high = snappy stop, low = floaty/icy)
 
         // --- Draw the ship graphic ---
         this.shipGraphic = VectorGraphics.drawPlayerShip(scene);
