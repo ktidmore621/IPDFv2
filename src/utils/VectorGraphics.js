@@ -1012,7 +1012,9 @@ const VectorGraphics = {
 
     /**
      * Draws a tracking missile for the missile silo.
-     * Looks like an orc-made rocket — crude and menacing.
+     * Large, imposing military rocket — ~45px long.
+     * Red/orange nose cone, dark green body, tail fins, exhaust nozzle.
+     * Drawn centered at (0, 0) facing right.
      *
      * @param {Phaser.Scene} scene
      * @returns {Phaser.GameObjects.Graphics}
@@ -1020,45 +1022,85 @@ const VectorGraphics = {
     drawTrackingMissile: function (scene) {
         const g = scene.add.graphics();
 
-        // Exhaust trail
-        g.fillStyle(0xff6600, 0.3);
-        g.fillCircle(-12, 0, 4);
-        g.fillStyle(0xff4400, 0.15);
-        g.fillCircle(-17, 0, 3);
+        // --- Exhaust nozzle glow at the rear ---
+        g.fillStyle(0xff6600, 0.5);
+        g.fillCircle(-20, 0, 5);
+        g.fillStyle(0xffaa00, 0.8);
+        g.fillCircle(-20, 0, 3);
 
-        // Missile body (dark rusty red)
-        g.fillStyle(0x8a2a1a, 1);
+        // --- Main body (dark military green cylinder) ---
+        g.fillStyle(0x2a3a1a, 1);
         g.beginPath();
-        g.moveTo(10, 0);        // Pointed nose
-        g.lineTo(5, -4);
-        g.lineTo(-8, -4);
-        g.lineTo(-8, 4);
-        g.lineTo(5, 4);
+        g.moveTo(18, -6);       // Upper forward edge
+        g.lineTo(-18, -6);      // Upper rear
+        g.lineTo(-18, 6);       // Lower rear
+        g.lineTo(18, 6);        // Lower forward edge
         g.closePath();
         g.fillPath();
 
-        // Danger stripe
+        // Darker underside for depth
+        g.fillStyle(0x1a2a0a, 0.6);
+        g.fillRect(-18, 1, 36, 5);
+
+        // --- Nose cone (red/orange, pointed) ---
+        g.fillStyle(0xcc2200, 1);
+        g.beginPath();
+        g.moveTo(25, 0);        // Sharp tip
+        g.lineTo(18, -6);       // Upper edge
+        g.lineTo(18, 6);        // Lower edge
+        g.closePath();
+        g.fillPath();
+
+        // Orange tip highlight
+        g.fillStyle(0xff6600, 0.8);
+        g.beginPath();
+        g.moveTo(24, 0);
+        g.lineTo(20, -3);
+        g.lineTo(20, 3);
+        g.closePath();
+        g.fillPath();
+
+        // --- Danger stripes (yellow/black bands) ---
         g.fillStyle(0xffaa00, 0.7);
-        g.fillRect(-2, -3, 4, 6);
+        g.fillRect(0, -5, 5, 10);
+        g.fillStyle(0x1a1a0a, 0.6);
+        g.fillRect(5, -5, 3, 10);
 
-        // Tail fins
-        g.fillStyle(0x5a1a0a, 1);
+        // --- Body seam detail ---
+        g.lineStyle(1, 0x1a2a0a, 0.5);
         g.beginPath();
-        g.moveTo(-6, -4);
-        g.lineTo(-10, -8);
-        g.lineTo(-10, -4);
+        g.moveTo(-10, -6);
+        g.lineTo(-10, 6);
+        g.strokePath();
+
+        // --- Upper tail fin ---
+        g.fillStyle(0x1a2a0a, 1);
+        g.beginPath();
+        g.moveTo(-14, -6);
+        g.lineTo(-22, -13);
+        g.lineTo(-22, -6);
         g.closePath();
         g.fillPath();
+
+        // --- Lower tail fin ---
+        g.fillStyle(0x1a2a0a, 1);
         g.beginPath();
-        g.moveTo(-6, 4);
-        g.lineTo(-10, 8);
-        g.lineTo(-10, 4);
+        g.moveTo(-14, 6);
+        g.lineTo(-22, 13);
+        g.lineTo(-22, 6);
         g.closePath();
         g.fillPath();
 
-        // Engine glow
-        g.fillStyle(0xffcc00, 0.9);
-        g.fillCircle(-9, 0, 2.5);
+        // --- Exhaust nozzle ring ---
+        g.lineStyle(2, 0x4a4a4a, 0.8);
+        g.beginPath();
+        g.moveTo(-18, -5);
+        g.lineTo(-18, 5);
+        g.strokePath();
+
+        // --- Engine glow (bright yellow at rear) ---
+        g.fillStyle(0xffdd44, 0.9);
+        g.fillCircle(-19, 0, 3);
 
         return g;
     },

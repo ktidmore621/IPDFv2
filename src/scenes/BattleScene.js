@@ -631,13 +631,62 @@ class BattleScene extends Phaser.Scene {
      * Spawn a single enemy structure at the given position.
      * Registers it with the combat manager for collision tracking.
      *
+     * Includes spacing logic: if the requested position would place this
+     * structure too close to an existing one (less than 150px edge-to-edge),
+     * the structure is shifted along the terrain until there's enough space.
+     * Orc foot soldiers can overlap structures, but structures must not
+     * overlap other structures.
+     *
      * @param {Function} StructureClass — The class to instantiate
      * @param {number} x — World X position
      * @param {number} groundY — Terrain Y at this X
      * @param {object} [options] — Optional settings (e.g., { isElite: true })
      */
     _spawnStructure(StructureClass, x, groundY, options) {
-        const structure = new StructureClass(this, x, groundY, options);
+        // Estimate the width of the new structure for spacing calculations.
+        // These match the bodyWidth values set in each class constructor.
+        let newWidth = 150;  // default fallback
+        if (StructureClass === PlasmaTurret) newWidth = 150;
+        else if (StructureClass === DoubleCannon) newWidth = 270;
+        else if (StructureClass === MissileSilo) newWidth = 240;
+        else if (StructureClass === MiningPlatform) newWidth = 300;
+        else if (StructureClass === Refinery) newWidth = 600;
+
+        // Minimum edge-to-edge gap between any two structures
+        const minGap = 150;
+
+        // Try the requested position first, then shift right if too close
+        let adjustedX = x;
+        let attempts = 0;
+        const maxAttempts = 20;
+
+        while (attempts < maxAttempts) {
+            let tooClose = false;
+            for (const existing of this.enemyStructures) {
+                // Calculate minimum center-to-center distance needed
+                const existingHalfWidth = existing.bodyWidth / 2;
+                const newHalfWidth = newWidth / 2;
+                const minCenterDist = existingHalfWidth + newHalfWidth + minGap;
+                const actualDist = Math.abs(adjustedX - existing.x);
+
+                if (actualDist < minCenterDist) {
+                    // Too close — shift past this structure
+                    tooClose = true;
+                    adjustedX = existing.x + minCenterDist + 10;
+                    break;
+                }
+            }
+            if (!tooClose) break;
+            attempts++;
+        }
+
+        // If we shifted position, update groundY to match new terrain height
+        if (adjustedX !== x && this.heightMap) {
+            const ix = Math.floor(Math.min(Math.max(adjustedX, 0), this.worldWidth - 1));
+            groundY = this.heightMap[ix];
+        }
+
+        const structure = new StructureClass(this, adjustedX, groundY, options);
         this.enemyStructures.push(structure);
         this.combatManager.addStructure(structure);
     }

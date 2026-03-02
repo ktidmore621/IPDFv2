@@ -55,6 +55,31 @@ class CombatManager {
 
         // Damage numbers for enemy bolts — keyed by type for different damage
         this.boltDamage = {};
+
+        // =================================================================
+        // MISSILE SMOKE TRAIL POOL
+        // =================================================================
+        // Smoke puffs that spawn behind tracking missiles as they fly.
+        // 8-10 puffs per missile, 6 missiles max = 60 puffs in pool.
+        // Each puff is a gray-white circle that drifts and fades over ~1 second.
+        this.missileSmokePuffs = [];
+        for (let i = 0; i < 60; i++) {
+            const puff = this.scene.add.graphics();
+            const puffSize = 5 + Math.random() * 5;
+            puff.fillStyle(0xbbbbbb, 0.5);
+            puff.fillCircle(0, 0, puffSize);
+            puff.fillStyle(0xdddddd, 0.3);
+            puff.fillCircle(0, 0, puffSize * 0.6);
+            puff.setVisible(false);
+            puff.setDepth(4);
+            this.missileSmokePuffs.push({
+                graphic: puff,
+                active: false,
+                vx: 0, vy: 0, life: 0
+            });
+        }
+        // Timer to control how often smoke puffs spawn (every ~60ms)
+        this._missileSmokeTimer = 0;
     }
 
     // =====================================================================
@@ -107,6 +132,7 @@ class CombatManager {
 
     /**
      * Creates a pool of tracking missiles.
+     * Missiles are now larger (~45px long) with bigger hitboxes.
      *
      * @param {number} size — Pool size
      * @returns {Array} — Pool of missile graphics
@@ -118,8 +144,9 @@ class CombatManager {
             const g = VectorGraphics.drawTrackingMissile(this.scene);
 
             this.scene.physics.world.enable(g);
-            g.body.setSize(18, 10);
-            g.body.setOffset(-9, -5);
+            // Larger hitbox to match the bigger 45px missile sprite
+            g.body.setSize(45, 14);
+            g.body.setOffset(-22, -7);
             g.body.setAllowGravity(false);
 
             g.setActive(false);
@@ -289,6 +316,23 @@ class CombatManager {
 
         // --- Update tracking missiles (homing + lifetime) ---
         this._updateTrackingMissiles(time, delta, playerObj, playerPos);
+
+        // --- Update missile smoke trail puffs (drift + fade) ---
+        this._updateMissileSmoke(delta);
+
+        // --- Spawn smoke puffs behind active tracking missiles ---
+        // Every ~60ms, each active missile emits a smoke puff at its rear
+        this._missileSmokeTimer += delta;
+        if (this._missileSmokeTimer > 60) {
+            this._missileSmokeTimer = 0;
+            for (const missile of this.trackingMissiles) {
+                if (!missile._proj.active) continue;
+                // Spawn puff at the rear of the missile (behind the exhaust nozzle)
+                const rearX = missile.x - Math.cos(missile.rotation) * 22;
+                const rearY = missile.y - Math.sin(missile.rotation) * 22;
+                this._spawnMissileSmoke(rearX, rearY);
+            }
+        }
     }
 
     /**
@@ -509,5 +553,57 @@ class CombatManager {
             obj.y < cam.scrollY - buffer ||
             obj.y > cam.scrollY + cam.height + buffer
         );
+    }
+
+    // =====================================================================
+    // MISSILE SMOKE TRAIL — Thick smoke puffs behind tracking missiles
+    // =====================================================================
+
+    /**
+     * Spawn a single smoke puff at a position (behind a missile's exhaust).
+     * The puff starts opaque gray-white, drifts slightly, and fades over ~1 second.
+     *
+     * @param {number} x — World X to spawn the puff
+     * @param {number} y — World Y to spawn the puff
+     */
+    _spawnMissileSmoke(x, y) {
+        const puff = this.missileSmokePuffs.find(p => !p.active);
+        if (!puff) return;
+
+        puff.active = true;
+        puff.graphic.setPosition(x, y);
+        puff.graphic.setVisible(true);
+        puff.graphic.setAlpha(0.5);
+        puff.graphic.setScale(0.6);
+        // Slight random drift so the trail isn't a straight line
+        puff.vx = (Math.random() - 0.5) * 15;
+        puff.vy = (Math.random() - 0.5) * 15;
+        puff.life = 0.8 + Math.random() * 0.4;
+    }
+
+    /**
+     * Update all active missile smoke puffs — drift, grow, fade.
+     *
+     * @param {number} delta — Frame time in ms
+     */
+    _updateMissileSmoke(delta) {
+        const dt = delta / 1000;
+        for (const puff of this.missileSmokePuffs) {
+            if (!puff.active) continue;
+            puff.life -= dt;
+            if (puff.life <= 0) {
+                puff.active = false;
+                puff.graphic.setVisible(false);
+                continue;
+            }
+            // Drift slightly
+            puff.graphic.x += puff.vx * dt;
+            puff.graphic.y += puff.vy * dt;
+            // Grow larger as smoke disperses
+            const scale = 0.6 + (1.0 - puff.life) * 1.0;
+            puff.graphic.setScale(scale);
+            // Fade out over lifetime
+            puff.graphic.setAlpha(Math.max(0, puff.life * 0.5));
+        }
     }
 }
