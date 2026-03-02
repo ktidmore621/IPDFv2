@@ -336,24 +336,26 @@ class PlasmaTurret extends EnemyStructure {
 
         super(scene, x, groundY, {
             hp: 30,
-            width: 50,           // Slightly wider hitbox for PNG sprite
-            height: 75,          // Taller hitbox for PNG sprite
-            explosionSize: 25,
+            width: 150,          // 3x hitbox for large PNG sprite
+            height: 225,         // 3x hitbox for large PNG sprite
+            explosionSize: 75,
             structureType: 'turret',
             isElite: isElite
         });
 
         // Use PNG sprite instead of code-drawn graphics
         // turret.png is 180x232, turret_elite.png is 180x267
+        // Scaled 3x larger than original (0.4 * 3 = 1.2)
         const spriteKey = isElite ? 'turret_elite' : 'turret';
         this.bodySprite = scene.add.image(0, 0, spriteKey);
         this.bodySprite.setOrigin(0.5, 1.0);  // Bottom-center anchor at ground
-        this.bodySprite.setScale(0.4);         // Scale to ~72x93 (regular) or ~72x107 (elite)
+        this.bodySprite.setScale(1.2);         // 3x scale: ~216x278 (regular) or ~216x320 (elite)
         this.container.add(this.bodySprite);
 
-        // Draw the rotating barrel (separate for aiming) — kept as Graphics
+        // Draw the rotating barrel (separate for aiming) — kept as Graphics, scaled up
         this.barrel = VectorGraphics.drawTurretBarrel(scene);
-        this.barrel.setPosition(0, -68);  // At the top of the tower
+        this.barrel.setPosition(0, -204);  // At the top of the 3x tower (68*3)
+        this.barrel.setScale(3);           // Scale barrel graphic 3x too
         this.container.add(this.barrel);
 
         // Firing settings — elite turrets fire faster
@@ -369,7 +371,7 @@ class PlasmaTurret extends EnemyStructure {
         for (let i = 0; i < 4; i++) {
             const smoke = scene.add.graphics();
             smoke.fillStyle(0x44ff44, 0.15);
-            smoke.fillCircle(0, 0, 4 + Math.random() * 3);
+            smoke.fillCircle(0, 0, 12 + Math.random() * 9);  // 3x smoke circle size
             smoke.setVisible(false);
             smoke.setDepth(1);
             this.smokeParticles.push({
@@ -390,9 +392,9 @@ class PlasmaTurret extends EnemyStructure {
         }
         this._updateSmoke(delta / 1000);
 
-        // Calculate distance to player
+        // Calculate distance to player — barrel is at 3x height (204px up)
         const dx = playerX - this.x;
-        const dy = playerY - (this.groundY - 68);
+        const dy = playerY - (this.groundY - 204);
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > this.range) return;
@@ -411,15 +413,16 @@ class PlasmaTurret extends EnemyStructure {
     _fire(angle) {
         if (!this.scene.combatManager) return;
 
-        const spawnX = this.x + Math.cos(angle) * 24;
-        const spawnY = (this.groundY - 68) + Math.sin(angle) * 24;
+        // 3x spawn distance from barrel center (24*3 = 72)
+        const spawnX = this.x + Math.cos(angle) * 72;
+        const spawnY = (this.groundY - 204) + Math.sin(angle) * 72;
         this.scene.combatManager.spawnEnemyBolt(
             spawnX, spawnY, angle, this.boltSpeed, this.damage, 'red'
         );
 
-        // Muzzle flash — RED for regular, ORANGE-RED for elite
+        // Muzzle flash — RED for regular, ORANGE-RED for elite (3x flash sizes)
         const flashColor = this.isElite ? 0xff6600 : 0xff2200;
-        const flashSize = this.isElite ? 10 : 8;
+        const flashSize = this.isElite ? 30 : 24;
         this._showMuzzleFlash(spawnX, spawnY, flashColor, flashSize);
     }
 
@@ -428,10 +431,10 @@ class PlasmaTurret extends EnemyStructure {
         if (!p) return;
 
         p.active = true;
-        // Emit from the tower body area
+        // Emit from the 3x tower body area (offsets tripled)
         p.graphic.setPosition(
-            this.x + (Math.random() - 0.5) * 10,
-            this.groundY - 40 - Math.random() * 20
+            this.x + (Math.random() - 0.5) * 30,
+            this.groundY - 120 - Math.random() * 60
         );
         p.graphic.setVisible(true);
         p.graphic.setAlpha(0.15);
@@ -477,29 +480,30 @@ class MissileSilo extends EnemyStructure {
 
         super(scene, x, groundY, {
             hp: 50,
-            width: 80,
-            height: 35,         // Slightly taller hitbox for sprite
-            explosionSize: 40,
+            width: 240,          // 3x hitbox
+            height: 105,         // 3x hitbox
+            explosionSize: 120,
             structureType: 'silo',
             isElite: isElite
         });
 
         // Use PNG sprite — missile_silo.png is 160x123
+        // Scaled 3x larger than original (0.55 * 3 = 1.65)
         this.bodySprite = scene.add.image(0, 0, 'missile_silo');
         this.bodySprite.setOrigin(0.5, 1.0);
-        this.bodySprite.setScale(0.55);   // Scale to ~88x68
+        this.bodySprite.setScale(1.65);   // 3x scale: ~264x203
         this.container.add(this.bodySprite);
 
-        // Animated door graphics (slide open/closed on top of sprite)
+        // Animated door graphics (slide open/closed) — 3x sizes
         this.leftDoor = scene.add.graphics();
         this.leftDoor.fillStyle(0x3a3a3a, 1);
-        this.leftDoor.fillRect(-35, -5, 34, 8);
+        this.leftDoor.fillRect(-105, -15, 102, 24);  // 3x door size
         this.leftDoor.setPosition(0, 0);
         this.container.add(this.leftDoor);
 
         this.rightDoor = scene.add.graphics();
         this.rightDoor.fillStyle(0x3a3a3a, 1);
-        this.rightDoor.fillRect(1, -5, 34, 8);
+        this.rightDoor.fillRect(3, -15, 102, 24);    // 3x door size
         this.rightDoor.setPosition(0, 0);
         this.container.add(this.rightDoor);
 
@@ -527,8 +531,8 @@ class MissileSilo extends EnemyStructure {
         this.lights.clear();
         const alpha = on ? 0.9 : 0.2;
         this.lights.fillStyle(0xffcc00, alpha);
-        this.lights.fillCircle(-42, -20, 3);
-        this.lights.fillCircle(42, -20, 3);
+        this.lights.fillCircle(-126, -60, 9);   // 3x position and size
+        this.lights.fillCircle(126, -60, 9);
     }
 
     _setDoors(open) {
@@ -540,7 +544,7 @@ class MissileSilo extends EnemyStructure {
 
         this.scene.tweens.add({
             targets: this.leftDoor,
-            x: open ? -20 : 0,
+            x: open ? -60 : 0,   // 3x slide distance
             duration: 400,
             ease: 'Quad.easeInOut',
             onComplete: () => { this.doorsAnimating = false; }
@@ -548,7 +552,7 @@ class MissileSilo extends EnemyStructure {
 
         this.scene.tweens.add({
             targets: this.rightDoor,
-            x: open ? 20 : 0,
+            x: open ? 60 : 0,    // 3x slide distance
             duration: 400,
             ease: 'Quad.easeInOut'
         });
@@ -586,16 +590,16 @@ class MissileSilo extends EnemyStructure {
         if (!this.scene.combatManager) return;
 
         this.scene.combatManager.spawnTrackingMissile(
-            this.x, this.groundY - 15, this.missileSpeed, this.damage
+            this.x, this.groundY - 45, this.missileSpeed, this.damage  // 3x launch height
         );
 
-        // Muzzle flash — bright YELLOW-WHITE from inside the silo
-        this._showMuzzleFlash(this.x, this.groundY - 15, 0xffffaa, 14);
+        // Muzzle flash — bright YELLOW-WHITE from inside the silo (3x size)
+        this._showMuzzleFlash(this.x, this.groundY - 45, 0xffffaa, 42);
     }
 
     _playExplosion() {
-        const explosion = VectorGraphics.drawExplosion(this.scene, 40);
-        explosion.setPosition(this.x, this.groundY - 10);
+        const explosion = VectorGraphics.drawExplosion(this.scene, 120);  // 3x
+        explosion.setPosition(this.x, this.groundY - 30);  // 3x offset
         explosion.setDepth(10);
 
         this.scene.tweens.add({
@@ -608,17 +612,17 @@ class MissileSilo extends EnemyStructure {
             onComplete: () => { explosion.destroy(); }
         });
 
-        // Smoke puff that lingers
+        // Smoke puff that lingers (3x sizes)
         const smoke = this.scene.add.graphics();
         smoke.fillStyle(0x444444, 0.5);
-        smoke.fillCircle(0, 0, 20);
-        smoke.setPosition(this.x, this.groundY - 15);
+        smoke.fillCircle(0, 0, 60);  // 3x
+        smoke.setPosition(this.x, this.groundY - 45);  // 3x
         smoke.setDepth(9);
 
         this.scene.tweens.add({
             targets: smoke,
             alpha: 0,
-            y: this.groundY - 60,
+            y: this.groundY - 180,  // 3x drift height
             scaleX: 2,
             scaleY: 2,
             duration: 1200,
@@ -646,22 +650,24 @@ class DoubleCannon extends EnemyStructure {
 
         super(scene, x, groundY, {
             hp: 50,
-            width: 90,           // Wider hitbox for PNG sprite
-            height: 60,          // Taller hitbox for PNG sprite
-            explosionSize: 35,
+            width: 270,          // 3x hitbox
+            height: 180,         // 3x hitbox
+            explosionSize: 105,
             structureType: 'cannon',
             isElite: isElite
         });
 
         // Use PNG sprite — double_cannon.png is 236x210
+        // Scaled 3x larger than original (0.42 * 3 = 1.26)
         this.bodySprite = scene.add.image(0, 0, 'double_cannon');
         this.bodySprite.setOrigin(0.5, 1.0);
-        this.bodySprite.setScale(0.42);   // Scale to ~99x88
+        this.bodySprite.setScale(1.26);   // 3x scale: ~297x265
         this.container.add(this.bodySprite);
 
-        // Twin barrels (separate for rotation) — kept as Graphics
+        // Twin barrels (separate for rotation) — kept as Graphics, scaled up
         this.barrels = VectorGraphics.drawCannonBarrels(scene);
-        this.barrels.setPosition(0, -30);
+        this.barrels.setPosition(0, -90);   // 3x position (30*3)
+        this.barrels.setScale(3);           // Scale barrel graphic 3x
         this.container.add(this.barrels);
 
         // Firing settings — elite cannons fire faster
@@ -677,7 +683,7 @@ class DoubleCannon extends EnemyStructure {
         for (let i = 0; i < 4; i++) {
             const smoke = scene.add.graphics();
             smoke.fillStyle(0x9944cc, 0.15);
-            smoke.fillCircle(0, 0, 4 + Math.random() * 3);
+            smoke.fillCircle(0, 0, 12 + Math.random() * 9);  // 3x smoke circle size
             smoke.setVisible(false);
             smoke.setDepth(1);
             this.smokeParticles.push({
@@ -698,9 +704,9 @@ class DoubleCannon extends EnemyStructure {
         }
         this._updateSmoke(delta / 1000);
 
-        // Calculate distance to player
+        // Calculate distance to player — barrel center is at 3x height (90px up)
         const dx = playerX - this.x;
-        const dy = playerY - (this.groundY - 30);
+        const dy = playerY - (this.groundY - 90);
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > this.range) return;
@@ -720,22 +726,22 @@ class DoubleCannon extends EnemyStructure {
         if (!this.scene.combatManager) return;
 
         const perpAngle = angle + Math.PI / 2;
-        const offset = 5.5;
+        const offset = 16.5;  // 3x barrel spread (5.5*3)
 
-        // Upper barrel bolt
-        const x1 = this.x + Math.cos(angle) * 30 + Math.cos(perpAngle) * offset;
-        const y1 = (this.groundY - 30) + Math.sin(angle) * 30 + Math.sin(perpAngle) * offset;
+        // Upper barrel bolt — 3x spawn distance (30*3 = 90)
+        const x1 = this.x + Math.cos(angle) * 90 + Math.cos(perpAngle) * offset;
+        const y1 = (this.groundY - 90) + Math.sin(angle) * 90 + Math.sin(perpAngle) * offset;
 
         // Lower barrel bolt
-        const x2 = this.x + Math.cos(angle) * 30 - Math.cos(perpAngle) * offset;
-        const y2 = (this.groundY - 30) + Math.sin(angle) * 30 - Math.sin(perpAngle) * offset;
+        const x2 = this.x + Math.cos(angle) * 90 - Math.cos(perpAngle) * offset;
+        const y2 = (this.groundY - 90) + Math.sin(angle) * 90 - Math.sin(perpAngle) * offset;
 
         this.scene.combatManager.spawnEnemyBolt(x1, y1, angle, this.boltSpeed, this.damage, 'green');
         this.scene.combatManager.spawnEnemyBolt(x2, y2, angle, this.boltSpeed, this.damage, 'green');
 
-        // Muzzle flash — bright GREEN at BOTH barrel tips
-        this._showMuzzleFlash(x1, y1, 0x44ff44, 8);
-        this._showMuzzleFlash(x2, y2, 0x44ff44, 8);
+        // Muzzle flash — bright GREEN at BOTH barrel tips (3x size)
+        this._showMuzzleFlash(x1, y1, 0x44ff44, 24);
+        this._showMuzzleFlash(x2, y2, 0x44ff44, 24);
     }
 
     _emitSmoke() {
@@ -743,10 +749,10 @@ class DoubleCannon extends EnemyStructure {
         if (!p) return;
 
         p.active = true;
-        // Emit from the pipe area on the side of the bunker
+        // Emit from the 3x pipe area on the side of the bunker (offsets tripled)
         p.graphic.setPosition(
-            this.x + (Math.random() < 0.5 ? -35 : 35),
-            this.groundY - 15 - Math.random() * 20
+            this.x + (Math.random() < 0.5 ? -105 : 105),
+            this.groundY - 45 - Math.random() * 60
         );
         p.graphic.setVisible(true);
         p.graphic.setAlpha(0.15);
@@ -774,8 +780,8 @@ class DoubleCannon extends EnemyStructure {
     }
 
     _playExplosion() {
-        const explosion = VectorGraphics.drawExplosion(this.scene, 35);
-        explosion.setPosition(this.x, this.groundY - 25);
+        const explosion = VectorGraphics.drawExplosion(this.scene, 105);  // 3x
+        explosion.setPosition(this.x, this.groundY - 75);  // 3x offset
         explosion.setDepth(10);
 
         this.scene.tweens.add({
@@ -788,21 +794,21 @@ class DoubleCannon extends EnemyStructure {
             onComplete: () => { explosion.destroy(); }
         });
 
-        // Green spark particles
+        // Green spark particles (3x sizes and distances)
         for (let i = 0; i < 6; i++) {
             const spark = this.scene.add.graphics();
             spark.fillStyle(0x44ff44, 0.8);
-            spark.fillCircle(0, 0, 3);
-            spark.setPosition(this.x, this.groundY - 25);
+            spark.fillCircle(0, 0, 9);  // 3x
+            spark.setPosition(this.x, this.groundY - 75);
             spark.setDepth(11);
 
             const angle = Math.random() * Math.PI * 2;
-            const dist = 40 + Math.random() * 60;
+            const dist = 120 + Math.random() * 180;  // 3x
 
             this.scene.tweens.add({
                 targets: spark,
                 x: this.x + Math.cos(angle) * dist,
-                y: (this.groundY - 25) + Math.sin(angle) * dist,
+                y: (this.groundY - 75) + Math.sin(angle) * dist,
                 alpha: 0,
                 duration: 300 + Math.random() * 200,
                 ease: 'Quad.easeOut',
@@ -826,19 +832,20 @@ class MiningPlatform extends EnemyStructure {
     constructor(scene, x, groundY) {
         super(scene, x, groundY, {
             hp: 60,
-            width: 100,          // Hitbox sized for sprite
-            height: 140,         // Taller for the tall sprite
+            width: 300,          // 3x hitbox
+            height: 420,         // 3x hitbox
             isObjective: true,
-            explosionSize: 50,
-            explosionDamageRadius: 150,
+            explosionSize: 150,
+            explosionDamageRadius: 450,  // 3x
             explosionDamageToPlayer: 15,
             structureType: 'mining'
         });
 
         // Use PNG sprite — mining_platform.png is 237x400
+        // Scaled 3x larger than original (0.4 * 3 = 1.2)
         this.bodySprite = scene.add.image(0, 0, 'mining_platform');
         this.bodySprite.setOrigin(0.5, 1.0);
-        this.bodySprite.setScale(0.4);   // Scale to ~95x160
+        this.bodySprite.setScale(1.2);   // 3x scale: ~284x480
         this.container.add(this.bodySprite);
 
         // --- Heavy toxic smoke system — 4-6 puffs at a time ---
@@ -854,7 +861,7 @@ class MiningPlatform extends EnemyStructure {
             } else {
                 smoke.fillStyle(0x88aa22, 0.2);
             }
-            smoke.fillCircle(0, 0, 6 + Math.random() * 5);
+            smoke.fillCircle(0, 0, 18 + Math.random() * 15);  // 3x smoke circle size
             smoke.setVisible(false);
             smoke.setDepth(1);
             this.smokeParticles.push({
@@ -884,10 +891,10 @@ class MiningPlatform extends EnemyStructure {
         if (!p) return;
 
         p.active = true;
-        // Exhaust vent area — near top of the platform
+        // Exhaust vent area — near top of the 3x platform (offsets tripled)
         p.graphic.setPosition(
-            this.x + 15 + (Math.random() - 0.5) * 20,
-            this.groundY - 100 - Math.random() * 20
+            this.x + 45 + (Math.random() - 0.5) * 60,
+            this.groundY - 300 - Math.random() * 60
         );
         p.graphic.setVisible(true);
         p.graphic.setAlpha(0.35);
@@ -916,9 +923,9 @@ class MiningPlatform extends EnemyStructure {
 
     _playExplosion() {
         const cx = this.x;
-        const cy = this.groundY - 45;
+        const cy = this.groundY - 135;  // 3x offset (45*3)
 
-        const explosion = VectorGraphics.drawExplosion(this.scene, 50);
+        const explosion = VectorGraphics.drawExplosion(this.scene, 150);  // 3x
         explosion.setPosition(cx, cy);
         explosion.setDepth(10);
 
@@ -932,21 +939,21 @@ class MiningPlatform extends EnemyStructure {
             onComplete: () => { explosion.destroy(); }
         });
 
-        // Debris particles
+        // Debris particles (3x sizes and distances)
         for (let i = 0; i < 10; i++) {
             const debris = this.scene.add.graphics();
             if (i < 5) {
                 debris.fillStyle(0xff6600, 0.8);
-                debris.fillRect(-3, -3, 6, 4);
+                debris.fillRect(-9, -9, 18, 12);  // 3x
             } else {
                 debris.fillStyle(0x4a3a1a, 0.9);
-                debris.fillRect(-4, -2, 8, 4);
+                debris.fillRect(-12, -6, 24, 12);  // 3x
             }
             debris.setPosition(cx, cy);
             debris.setDepth(11);
 
             const angle = Math.random() * Math.PI * 2;
-            const dist = 80 + Math.random() * 100;
+            const dist = 240 + Math.random() * 300;  // 3x
 
             this.scene.tweens.add({
                 targets: debris,
@@ -982,19 +989,20 @@ class Refinery extends EnemyStructure {
     constructor(scene, x, groundY) {
         super(scene, x, groundY, {
             hp: 120,
-            width: 200,          // Wide hitbox for the large sprite
-            height: 160,         // Tall hitbox for the large sprite
+            width: 600,          // 3x hitbox
+            height: 480,         // 3x hitbox
             isObjective: true,
-            explosionSize: 80,
-            explosionDamageRadius: 300,
+            explosionSize: 240,
+            explosionDamageRadius: 900,  // 3x
             explosionDamageToPlayer: 30,
             structureType: 'refinery'
         });
 
         // Use PNG sprite — refinery.png is 463x400
+        // Scaled 3x larger than original (0.45 * 3 = 1.35)
         this.bodySprite = scene.add.image(0, 0, 'refinery');
         this.bodySprite.setOrigin(0.5, 1.0);
-        this.bodySprite.setScale(0.45);   // Scale to ~208x180
+        this.bodySprite.setScale(1.35);   // 3x scale: ~625x540
         this.container.add(this.bodySprite);
 
         // --- Heavy dark smoke system — 6-8 puffs continuously ---
@@ -1002,11 +1010,11 @@ class Refinery extends EnemyStructure {
         this.smokeParticles = [];
         this.smokeTimer = 0;
 
-        // Smokestack positions relative to refinery center (approximate)
+        // Smokestack positions relative to refinery center — 3x offset
         this.smokestacks = [
-            { x: -24, y: -138 },
-            { x: 1, y: -148 },
-            { x: 26, y: -133 }
+            { x: -72, y: -414 },
+            { x: 3, y: -444 },
+            { x: 78, y: -399 }
         ];
 
         // Create more particles for heavy smoke
@@ -1016,11 +1024,11 @@ class Refinery extends EnemyStructure {
             if (i % 3 === 0) {
                 // Purplish-red glow from Voidheart Ore processing
                 smoke.fillStyle(0x8b2252, 0.15);
-                smoke.fillCircle(0, 0, 8 + Math.random() * 5);
+                smoke.fillCircle(0, 0, 24 + Math.random() * 15);  // 3x
             } else {
                 // Dark purple-black
                 smoke.fillStyle(0x1a0a1a, 0.3);
-                smoke.fillCircle(0, 0, 10 + Math.random() * 6);
+                smoke.fillCircle(0, 0, 30 + Math.random() * 18);  // 3x
             }
             smoke.setVisible(false);
             smoke.setDepth(1);
@@ -1082,10 +1090,10 @@ class Refinery extends EnemyStructure {
 
     _playExplosion() {
         const cx = this.x;
-        const cy = this.groundY - 75;
+        const cy = this.groundY - 225;  // 3x offset (75*3)
 
-        // Massive fireball
-        const explosion = VectorGraphics.drawExplosion(this.scene, 80);
+        // Massive fireball (3x)
+        const explosion = VectorGraphics.drawExplosion(this.scene, 240);
         explosion.setPosition(cx, cy);
         explosion.setDepth(10);
 
@@ -1099,12 +1107,12 @@ class Refinery extends EnemyStructure {
             onComplete: () => { explosion.destroy(); }
         });
 
-        // Secondary smaller explosions
+        // Secondary smaller explosions (3x sizes and offsets)
         for (let i = 0; i < 3; i++) {
             this.scene.time.delayedCall(100 + i * 150, () => {
-                const subExp = VectorGraphics.drawExplosion(this.scene, 30);
-                const sx = cx + (Math.random() - 0.5) * 100;
-                const sy = cy + (Math.random() - 0.5) * 60;
+                const subExp = VectorGraphics.drawExplosion(this.scene, 90);  // 3x
+                const sx = cx + (Math.random() - 0.5) * 300;  // 3x
+                const sy = cy + (Math.random() - 0.5) * 180;  // 3x
                 subExp.setPosition(sx, sy);
                 subExp.setDepth(10);
 
@@ -1120,18 +1128,18 @@ class Refinery extends EnemyStructure {
             });
         }
 
-        // Shrapnel debris
+        // Shrapnel debris (3x sizes and distances)
         for (let i = 0; i < 16; i++) {
             const shrapnel = this.scene.add.graphics();
             shrapnel.fillStyle(0x6a5a3a, 0.9);
-            const sw = 4 + Math.random() * 6;
-            const sh = 2 + Math.random() * 4;
+            const sw = 12 + Math.random() * 18;  // 3x
+            const sh = 6 + Math.random() * 12;   // 3x
             shrapnel.fillRect(-sw / 2, -sh / 2, sw, sh);
             shrapnel.setPosition(cx, cy);
             shrapnel.setDepth(12);
 
             const angle = Math.random() * Math.PI * 2;
-            const dist = 150 + Math.random() * 200;
+            const dist = 450 + Math.random() * 600;  // 3x
 
             this.scene.tweens.add({
                 targets: shrapnel,
