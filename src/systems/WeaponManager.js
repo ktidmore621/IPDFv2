@@ -268,9 +268,13 @@ class WeaponManager {
      * The missile will automatically split into 3 submunitions after
      * traveling ~350 pixels (handled in the update method).
      *
+     * On mobile/touch: fires toward the right stick direction if active.
+     * On keyboard: fires in the direction the ship is facing.
+     *
      * @param {number} time — Current game time in milliseconds
+     * @param {object|null} aimVector — { x, y } aim direction from right stick, or null
      */
-    fireClusterMissile(time) {
+    fireClusterMissile(time, aimVector) {
         // Check cooldown
         if (time - this.missileLastFired < this.missileFireRate) return;
 
@@ -280,8 +284,15 @@ class WeaponManager {
 
         this.missileLastFired = time;
 
-        // Spawn at the ship's nose, same as plasma (50px from center at 0.2 scale)
-        const angle = this.player.facingAngle;
+        // Determine firing angle: use right stick aim if available, else ship facing
+        let angle;
+        if (aimVector && (aimVector.x !== 0 || aimVector.y !== 0)) {
+            angle = Math.atan2(aimVector.y, aimVector.x);
+        } else {
+            angle = this.player.facingAngle;
+        }
+
+        // Spawn at the ship's nose (50px from center at 0.2 scale)
         const noseX = this.player.container.x + Math.cos(angle) * 50;
         const noseY = this.player.container.y + Math.sin(angle) * 50;
 
