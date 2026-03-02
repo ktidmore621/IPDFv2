@@ -35,9 +35,23 @@ class BattleScene extends Phaser.Scene {
      * until ship selection is added in Phase 5.
      */
     preload() {
+        // Player ship sprites
         this.load.image('strikewing', 'assets/sprites/strikewing.png');
         this.load.image('tempest', 'assets/sprites/tempest.png');
         this.load.image('hammerfall', 'assets/sprites/hammerfall.png');
+
+        // Enemy structure sprites (Phase 4 — replaces code-drawn visuals)
+        this.load.image('turret', 'assets/sprites/turret.png');
+        this.load.image('turret_elite', 'assets/sprites/turret_elite.png');
+        this.load.image('double_cannon', 'assets/sprites/double_cannon.png');
+        this.load.image('missile_silo', 'assets/sprites/missile_silo.png');
+        this.load.image('mining_platform', 'assets/sprites/mining_platform.png');
+        this.load.image('refinery', 'assets/sprites/refinery.png');
+
+        // Orc soldier sprites (two variants for visual variety)
+        this.load.image('orc_soldier', 'assets/sprites/orc_soldier.png');
+        this.load.image('orc_soldier_alt', 'assets/sprites/orc_soldier_alt.png');
+        this.load.image('orc_guard', 'assets/sprites/orc_guard.png');
     }
 
     /**
@@ -572,26 +586,38 @@ class BattleScene extends Phaser.Scene {
             return this.heightMap[ix];
         };
 
-        // --- OUTPOST 1 (around x = 2500): 1 plasma turret + 1 double cannon ---
+        // --- OUTPOST 1 (around x = 2500): regular turret + cannon ---
         this._spawnStructure(PlasmaTurret, 2400, getGroundY(2400));
         this._spawnStructure(DoubleCannon, 2700, getGroundY(2700));
 
         // --- MINING PLATFORM 1 (around x = 3500) ---
+        // Objective with 2-3 elite defenders clustered around it
         this._spawnStructure(MiningPlatform, 3500, getGroundY(3500));
+        this._spawnStructure(PlasmaTurret, 3300, getGroundY(3300), { isElite: true });
+        this._spawnStructure(DoubleCannon, 3700, getGroundY(3700), { isElite: true });
 
-        // --- OUTPOST 2 (around x = 5000): 1 missile silo + 1 plasma turret ---
+        // --- OUTPOST 2 (around x = 5000): regular silo + turret ---
         this._spawnStructure(MissileSilo, 4800, getGroundY(4800));
         this._spawnStructure(PlasmaTurret, 5200, getGroundY(5200));
 
         // --- MINING PLATFORM 2 (around x = 6500) ---
+        // Objective with 2-3 elite defenders clustered around it
         this._spawnStructure(MiningPlatform, 6500, getGroundY(6500));
+        this._spawnStructure(PlasmaTurret, 6300, getGroundY(6300), { isElite: true });
+        this._spawnStructure(MissileSilo, 6700, getGroundY(6700), { isElite: true });
+        this._spawnStructure(DoubleCannon, 6550, getGroundY(6550), { isElite: true });
 
-        // --- OUTPOST 3 (around x = 8000): 1 missile silo + 1 double cannon ---
+        // --- OUTPOST 3 (around x = 8000): regular silo + cannon ---
         this._spawnStructure(MissileSilo, 7800, getGroundY(7800));
         this._spawnStructure(DoubleCannon, 8200, getGroundY(8200));
 
-        // --- REFINERY (around x = 10500 — near end of map) ---
+        // --- REFINERY (around x = 10500 — final objective) ---
+        // 3-4 elite defenders creating crossfire around the refinery
         this._spawnStructure(Refinery, 10500, getGroundY(10500));
+        this._spawnStructure(PlasmaTurret, 10200, getGroundY(10200), { isElite: true });
+        this._spawnStructure(DoubleCannon, 10350, getGroundY(10350), { isElite: true });
+        this._spawnStructure(MissileSilo, 10650, getGroundY(10650), { isElite: true });
+        this._spawnStructure(PlasmaTurret, 10800, getGroundY(10800), { isElite: true });
 
         // Count mission objectives
         this.totalObjectives = 0;
@@ -608,9 +634,10 @@ class BattleScene extends Phaser.Scene {
      * @param {Function} StructureClass — The class to instantiate
      * @param {number} x — World X position
      * @param {number} groundY — Terrain Y at this X
+     * @param {object} [options] — Optional settings (e.g., { isElite: true })
      */
-    _spawnStructure(StructureClass, x, groundY) {
-        const structure = new StructureClass(this, x, groundY);
+    _spawnStructure(StructureClass, x, groundY, options) {
+        const structure = new StructureClass(this, x, groundY, options);
         this.enemyStructures.push(structure);
         this.combatManager.addStructure(structure);
     }
@@ -832,8 +859,9 @@ class BattleScene extends Phaser.Scene {
         }
 
         // Secondary fire (CM-3 Cluster Missile) — press E or double-tap right
+        // On mobile: aim toward right stick direction if active
         if (this.inputManager.altFireJustPressed) {
-            this.weaponManager.fireClusterMissile(time);
+            this.weaponManager.fireClusterMissile(time, this.inputManager.aimVector);
         }
 
         // Step 4: Update all active projectiles (movement, distance checks, splits)
